@@ -1,0 +1,10 @@
+.pio/
+.vscode/
+
+backend/.venv/
+backend/telemetry.db
+
+__pycache__/
+*.pyc
+
+src/config/network_config.local.h
