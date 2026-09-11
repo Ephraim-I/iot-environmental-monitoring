@@ -1,5 +1,7 @@
 #include "wifi_manager.h"
 
+#include "device/logger.h"
+
 #include <WiFi.h>
 
 WiFiManager::WiFiManager(const char* ssid, const char* password)
@@ -10,25 +12,35 @@ void WiFiManager::begin() {
     WiFi.mode(WIFI_STA);
     WiFi.begin(_ssid, _password);
 
-    Serial.print("Connecting to Wi-Fi");
-
     unsigned long startTime = millis();
+    int WIFI_CONNECTION_TIMEOUT_MS = 15000;
+
+    Logger::info(
+        "WiFi",
+        "Connecting to Wi-Fi"
+    );
 
     while (WiFi.status() != WL_CONNECTED &&
-           millis() - startTime < 15000) {
-
+           millis() - startTime < WIFI_CONNECTION_TIMEOUT_MS) {
         delay(500);
-        Serial.print(".");
     }
 
-    Serial.println();
-
     if (isConnected()) {
-        Serial.println("Wi-Fi connected.");
-        Serial.print("IP address: ");
-        Serial.println(WiFi.localIP());
+        Logger::info(
+            "WiFi",
+            "Wi-Fi connected"
+        );
+
+        Logger::infof(
+            "WiFi",
+            "IP address: %s",
+            WiFi.localIP().toString().c_str()
+        );
     } else {
-        Serial.println("ERROR: Wi-Fi connection failed.");
+        Logger::error(
+            "WiFi",
+            "Wi-Fi connection failed"
+        );
     }
 }
 
@@ -45,7 +57,10 @@ void WiFiManager::update() {
 
     _lastReconnectAttempt = currentTime;
 
-    Serial.println("Wi-Fi disconnected. Attempting reconnection...");
+    Logger::warning(
+        "WiFi",
+        "Wi-Fi disconnected. Attempting reconnection"
+    );
 
     WiFi.disconnect();
     WiFi.begin(_ssid, _password);

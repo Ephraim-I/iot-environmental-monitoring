@@ -1,20 +1,26 @@
 #include "http_client.h"
 
+#include "device/logger.h"
+
 #include <HTTPClient.h>
 
 HttpClient::HttpClient(const char* endpoint)
     : _endpoint(endpoint) {
 }
 
-bool HttpClient::postJson(const String& payload) {
+HttpResult HttpClient::postJson(const String& payload) {
     HTTPClient http;
 
     http.setConnectTimeout(5000);
     http.setTimeout(5000);
 
     if (!http.begin(_endpoint)) {
-        Serial.println("HTTP client initialization failed.");
-        return false;
+        Logger::error(
+            "HTTP",
+            "HTTP client initialization failed"
+        );
+
+        return HttpResult::CLIENT_INIT_FAILED;
     }
 
     http.addHeader("Content-Type", "application/json");
@@ -22,29 +28,42 @@ bool HttpClient::postJson(const String& payload) {
     int responseCode = http.POST(payload);
 
     if (responseCode > 0) {
-        Serial.print("HTTP response code: ");
-        Serial.println(responseCode);
+        Logger::infof(
+            "HTTP",
+            "Response code: %d",
+            responseCode
+        );
 
         String response = http.getString();
 
-        Serial.print("Server response: ");
-        Serial.println(response);
+        Logger::infof(
+            "HTTP",
+            "Server response: %s",
+            response.c_str()
+        );
 
         http.end();
 
         if (responseCode >= 200 && responseCode < 300) {
-            return true;
+            return HttpResult::SUCCESS;
         }
 
-        Serial.println("HTTP request returned an unsuccessful status code.");
+        Logger::warningf(
+            "HTTP",
+            "Request returned unsuccessful status code: %d",
+            responseCode
+        );
 
-        return false;
+        return HttpResult::SERVER_REJECTED;
     }
 
-    Serial.print("HTTP request failed: ");
-    Serial.println(http.errorToString(responseCode));
+    Logger::errorf(
+        "HTTP",
+        "Request failed: %s",
+        http.errorToString(responseCode).c_str()
+    );
 
     http.end();
 
-    return false;
+    return HttpResult::TRANSPORT_ERROR;
 }

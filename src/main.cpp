@@ -5,6 +5,7 @@
 #include "config/network_config.h"
 
 #include "device/system_status.h"
+#include "device/logger.h"
 
 #include "sensors/dht11_sensor.h"
 
@@ -38,11 +39,8 @@ void setup() {
 
     delay(1000);
 
-    Serial.println();
-    Serial.println("================================");
-    Serial.println("IoT Engineering Lab");
-    Serial.println("Environment Sensor Node");
-    Serial.println("================================");
+    Logger::info("System", "IoT Engineering Lab");
+    Logger::info("System", "Environment Sensor Node");
 
     environmentSensor.begin();
 
@@ -57,23 +55,30 @@ void setup() {
             NetworkStatus::DISCONNECTED
         );
 
-        Serial.println("WARNING: Wi-Fi disconnected.");
+        Logger::warning(
+            "WiFi",
+            "Wi-Fi disconnected"
+        );
     }
 
-    if (wifiManager.isConnected()) {
-        Serial.print("Wi-Fi: connected, IP: ");
-        Serial.println(wifiManager.getIPAddress());
-    }
-
-    Serial.println("DHT11 sensor initialized.");
+    Logger::info(
+        "Sensor",
+        "DHT11 sensor initialized"
+    );
 
     systemStatus.setStatus(SystemStatus::RUNNING);
 
-    Serial.print("System status: ");
-    Serial.println(systemStatus.getStatusName());
+    Logger::infof(
+        "System",
+        "System status: %s",
+        systemStatus.getStatusName()
+    );
 
-    Serial.print("Network status: ");
-    Serial.println(systemStatus.getNetworkStatusName());
+    Logger::infof(
+        "Network",
+        "Network status: %s",
+        systemStatus.getNetworkStatusName()
+    );
 }
 
 
@@ -120,10 +125,16 @@ void loop() {
             SystemStatus::SENSOR_ERROR
         );
 
-        Serial.println("ERROR: Failed to read DHT11 sensor.");
+        Logger::error(
+            "Sensor",
+            "Failed to read DHT11 sensor"
+        );
 
-        Serial.print("System status: ");
-        Serial.println(systemStatus.getStatusName());
+        Logger::errorf(
+            "System",
+            "System status: %s",
+            systemStatus.getStatusName()
+        );
 
         return;
     }
@@ -137,13 +148,17 @@ void loop() {
 
     digitalWrite(STATUS_LED_PIN, HIGH);
 
-    Serial.print("Temperature: ");
-    Serial.print(reading.temperature, 1);
-    Serial.println(" °C");
+    Logger::infof(
+        "Sensor",
+        "Temperature: %.1f C",
+        reading.temperature
+    );
 
-    Serial.print("Humidity: ");
-    Serial.print(reading.humidity, 1);
-    Serial.println(" %");
+    Logger::infof(
+        "Sensor",
+        "Humidity: %.1f %%",
+        reading.humidity
+    );
 
     /*
      * Build telemetry object.
@@ -162,40 +177,65 @@ void loop() {
      */
     String payload = telemetryToJson(telemetry);
 
-    Serial.print("Telemetry: ");
-    Serial.println(payload);
+    Logger::infof(
+        "Telemetry",
+        "Payload: %s",
+        payload.c_str()
+    );
 
     /*
      * Only attempt HTTP transmission
      * when Wi-Fi is currently available.
      */
-    bool sent = false;
+    HttpResult transmissionResult = HttpResult::TRANSPORT_ERROR;
 
     if (wifiManager.isConnected()) {
-        sent = telemetryClient.postJson(payload);
+        transmissionResult = telemetryClient.postJson(payload);
     } else {
-        Serial.println(
-            "Telemetry transmission skipped: Wi-Fi unavailable."
+        Logger::warning(
+            "Telemetry",
+            "Transmission skipped: Wi-Fi unavailable"
         );
     }
 
     /*
      * Report transmission result.
      */
-    if (sent) {
-        Serial.println(
-            "Telemetry transmission: SUCCESS"
-        );
-    } else {
-        Serial.println(
-            "Telemetry transmission: FAILED"
-        );
+    switch (transmissionResult) {
+        case HttpResult::SUCCESS:
+            Logger::info(
+                "Telemetry",
+                "Transmission successful"
+            );
+            break;
 
-        Serial.print("Network status: ");
-        Serial.println(
+        case HttpResult::CLIENT_INIT_FAILED:
+            Logger::error(
+                "Telemetry",
+                "Transmission failed: HTTP client initialization"
+            );
+            break;
+
+        case HttpResult::TRANSPORT_ERROR:
+            Logger::error(
+                "Telemetry",
+                "Transmission failed: transport error"
+            );
+            break;
+
+        case HttpResult::SERVER_REJECTED:
+            Logger::error(
+                "Telemetry",
+                "Transmission failed: server rejected request"
+            );
+            break;
+    }
+
+    if (!wifiManager.isConnected()) {
+        Logger::errorf(
+            "Network",
+            "Network status: %s",
             systemStatus.getNetworkStatusName()
         );
     }
-
-    Serial.println("--------------------------------");
 }
