@@ -2,7 +2,7 @@
 
 #include "config/device_config.h"
 #include "config/pins.h"
-#include "config/network_config.h"
+#include "config/network_config.local.h"
 
 #include "device/system_status.h"
 #include "device/logger.h"
@@ -10,9 +10,13 @@
 #include "sensors/dht11_sensor.h"
 
 #include "telemetry/telemetry.h"
+#include "telemetry/retry_policy.h"
 
 #include "network/wifi_manager.h"
 #include "network/http_client.h"
+
+#include <TelemetryBuffer.h>
+#include <telemetry_metrics.h>
 
 
 DHT11Sensor environmentSensor(DHT11_PIN);
@@ -30,6 +34,114 @@ SystemStatusManager systemStatus;
 
 unsigned long lastSensorRead = 0;
 
+bool telemetryRetryActive = false;
+uint8_t telemetryRetryAttempt = 0;
+unsigned long telemetryRetryNextAttempt = 0;
+
+unsigned long lastMetricsReport = 0;
+
+#define METRICS_REPORT_INTERVAL_MS 30000
+
+HttpResult transmissionResult = HttpResult::TRANSPORT_ERROR;
+
+
+TelemetryBuffer telemetryBuffer;
+TelemetryMetrics telemetryMetrics;
+
+bool processTelemetryQueue();
+
+float getBufferDropRate(const TelemetryMetrics& metrics);
+
+bool processTelemetryQueue() {
+    if (!wifiManager.isConnected()) {
+        return false;
+    }
+
+    if (telemetryBuffer.isEmpty()) {
+        return false;
+    }
+
+    String payload;
+
+    if (!telemetryBuffer.peek(payload)) {
+        return false;
+    }
+
+    Logger::infof(
+        "Telemetry",
+        "Replaying queued telemetry. Queue size: %u/%u",
+        telemetryBuffer.size(),
+        telemetryBuffer.capacity()
+    );
+
+    HttpResult result =
+        telemetryClient.postJson(payload);
+
+    if (result == HttpResult::TRANSPORT_ERROR) {
+        telemetryMetrics.transportFailures++;
+    }
+
+    if (result == HttpResult::SUCCESS) {
+        String transmittedPayload;
+
+        telemetryBuffer.dequeue(transmittedPayload);
+
+        telemetryMetrics.successfulTransmissions++;
+
+        Logger::infof(
+            "Telemetry",
+            "Queued telemetry transmitted successfully. Queue size: %u/%u",
+            telemetryBuffer.size(),
+            telemetryBuffer.capacity()
+        );
+
+        return true;
+    }
+
+    Logger::warning(
+        "Telemetry",
+        "Queued telemetry transmission failed. Payload retained"
+    );
+
+    return false;
+}
+
+void reportTelemetryMetrics() {
+    float successRate =
+        getTransmissionSuccessRate(telemetryMetrics);
+
+    float failureRate =
+        getTransmissionFailureRate(telemetryMetrics);
+
+    float dropRate =
+        getBufferDropRate(telemetryMetrics);
+
+    Logger::infof(
+        "Metrics",
+        "TX success: %.2f%% | TX failure: %.2f%% | Buffer drop: %.2f%%",
+        successRate,
+        failureRate,
+        dropRate
+    );
+
+    Logger::infof(
+        "Metrics",
+        "Success: %lu | Failures: %lu | Retries: %lu | Exhaustions: %lu",
+        telemetryMetrics.successfulTransmissions,
+        telemetryMetrics.transportFailures,
+        telemetryMetrics.retryAttempts,
+        telemetryMetrics.retryExhaustions
+    );
+
+    Logger::infof(
+        "Metrics",
+        "Buffered: %lu | Dropped: %lu | Queue: %u/%u",
+        telemetryMetrics.bufferedPayloads,
+        telemetryMetrics.droppedPayloads,
+        telemetryBuffer.size(),
+        telemetryBuffer.capacity()
+    );
+}
 
 void setup() {
     Serial.begin(SERIAL_BAUD_RATE);
@@ -45,6 +157,8 @@ void setup() {
     environmentSensor.begin();
 
     wifiManager.begin();
+
+    resetTelemetryMetrics(telemetryMetrics);
 
     if (wifiManager.isConnected()) {
         systemStatus.setNetworkStatus(
@@ -85,6 +199,12 @@ void setup() {
 void loop() {
     unsigned long currentTime = millis();
 
+    if (currentTime - lastMetricsReport >= METRICS_REPORT_INTERVAL_MS) {
+        lastMetricsReport = currentTime;
+
+        reportTelemetryMetrics();
+    }
+
     /*
      * Maintain Wi-Fi connection.
      */
@@ -102,6 +222,115 @@ void loop() {
         systemStatus.setNetworkStatus(
             NetworkStatus::DISCONNECTED
         );
+    }
+
+    if (!telemetryRetryActive && !telemetryBuffer.isEmpty()) {
+        processTelemetryQueue();
+        return;
+    }
+
+    /*
+     * Process pending telemetry retry.
+     *
+     * The retry is scheduled using millis() so the
+     * firmware does not block while waiting.
+     */
+
+    if (telemetryRetryActive) {
+        if ((long)(currentTime - telemetryRetryNextAttempt) >= 0) {
+            if (!wifiManager.isConnected()) {
+                Logger::warning(
+                    "Telemetry",
+                    "Retry delayed: Wi-Fi unavailable"
+                );
+
+                telemetryRetryNextAttempt =
+                    currentTime + TELEMETRY_RETRY_DELAY_MS;
+
+                return;
+            }
+
+            String payload;
+
+            if (!telemetryBuffer.peek(payload)) {
+                Logger::warning(
+                    "Telemetry",
+                    "Retry requested but buffer is empty"
+                );
+
+                telemetryRetryActive = false;
+                telemetryRetryAttempt = 0;
+
+                return;
+            }
+
+            telemetryRetryAttempt++;
+
+            telemetryMetrics.retryAttempts++;
+
+            Logger::infof(
+                "Telemetry",
+                "Transmission attempt %u/%u",
+                telemetryRetryAttempt,
+                TELEMETRY_MAX_ATTEMPTS
+            );
+
+            transmissionResult =
+                telemetryClient.postJson(payload);
+
+            if (transmissionResult == HttpResult::TRANSPORT_ERROR) {
+                telemetryMetrics.transportFailures++;
+            }          
+
+            if (transmissionResult == HttpResult::SUCCESS) {
+                Logger::info(
+                    "Telemetry",
+                    "Transmission successful"
+                );
+
+                String discardedPayload;
+
+                telemetryBuffer.dequeue(discardedPayload);
+
+                telemetryMetrics.successfulTransmissions++;
+
+                telemetryRetryActive = false;
+                telemetryRetryAttempt = 0;
+            }
+            else if (
+                transmissionResult == HttpResult::TRANSPORT_ERROR &&
+                telemetryRetryAttempt < TELEMETRY_MAX_ATTEMPTS
+            ) {
+                telemetryRetryNextAttempt =
+                    currentTime + TELEMETRY_RETRY_DELAY_MS;
+
+                Logger::warningf(
+                    "Telemetry",
+                    "Transport failure. Retrying in %lu ms",
+                    TELEMETRY_RETRY_DELAY_MS
+                );
+            }
+            else {
+                telemetryMetrics.retryExhaustions++;
+
+                Logger::error(
+                    "Telemetry",
+                    "Transmission failed after maximum attempts"
+                );
+            
+                telemetryRetryActive = false;
+                telemetryRetryAttempt = 0;
+            
+                Logger::warningf(
+                    "Telemetry",
+                    "Payload retained in buffer. Queue size: %u/%u",
+                    telemetryBuffer.size(),
+                    telemetryBuffer.capacity()
+                );
+            }
+        }
+
+        return;
     }
 
     /*
@@ -184,58 +413,95 @@ void loop() {
     );
 
     /*
-     * Only attempt HTTP transmission
-     * when Wi-Fi is currently available.
+     * Store telemetry payload for transmission.
      */
-    HttpResult transmissionResult = HttpResult::TRANSPORT_ERROR;
+    if (!telemetryBuffer.enqueue(payload)) {
+        telemetryMetrics.droppedPayloads++;
 
-    if (wifiManager.isConnected()) {
-        transmissionResult = telemetryClient.postJson(payload);
-    } else {
-        Logger::warning(
+        Logger::error(
             "Telemetry",
-            "Transmission skipped: Wi-Fi unavailable"
+            "Telemetry buffer full. Payload dropped"
+        );
+    }
+    else {
+        telemetryMetrics.bufferedPayloads++;
+
+        Logger::infof(
+            "Telemetry",
+            "Telemetry buffered. Queue size: %u/%u",
+            telemetryBuffer.size(),
+            telemetryBuffer.capacity()
         );
     }
 
-    /*
-     * Report transmission result.
-     */
-    switch (transmissionResult) {
-        case HttpResult::SUCCESS:
-            Logger::info(
-                "Telemetry",
-                "Transmission successful"
-            );
-            break;
+    if (!telemetryRetryActive &&
+        wifiManager.isConnected() &&
+        !telemetryBuffer.isEmpty()) {
 
-        case HttpResult::CLIENT_INIT_FAILED:
-            Logger::error(
-                "Telemetry",
-                "Transmission failed: HTTP client initialization"
-            );
-            break;
+        String queuedPayload;
 
-        case HttpResult::TRANSPORT_ERROR:
-            Logger::error(
-                "Telemetry",
-                "Transmission failed: transport error"
-            );
-            break;
+        if (telemetryBuffer.peek(queuedPayload)) {
+            telemetryRetryAttempt = 1;
 
-        case HttpResult::SERVER_REJECTED:
-            Logger::error(
+            Logger::infof(
                 "Telemetry",
-                "Transmission failed: server rejected request"
+                "Transmission attempt %u/%u",
+                telemetryRetryAttempt,
+                TELEMETRY_MAX_ATTEMPTS
             );
-            break;
+
+            transmissionResult =
+                telemetryClient.postJson(queuedPayload);
+
+            if (transmissionResult == HttpResult::SUCCESS) {
+                Logger::info(
+                    "Telemetry",
+                    "Transmission successful"
+                );
+
+                String transmittedPayload;
+                telemetryBuffer.dequeue(transmittedPayload);
+
+                telemetryMetrics.successfulTransmissions++;
+
+                telemetryRetryAttempt = 0;
+            }
+            else if (
+                transmissionResult == HttpResult::TRANSPORT_ERROR &&
+                telemetryRetryAttempt < TELEMETRY_MAX_ATTEMPTS
+            ) {
+                telemetryRetryActive = true;
+
+                telemetryRetryNextAttempt =
+                    millis() + TELEMETRY_RETRY_DELAY_MS;
+
+                Logger::warningf(
+                    "Telemetry",
+                    "Transport failure. Retrying in %lu ms",
+                    TELEMETRY_RETRY_DELAY_MS
+                );
+            }
+            else {
+                Logger::error(
+                    "Telemetry",
+                    "Transmission failed"
+                );
+
+                telemetryRetryAttempt = 0;
+
+                Logger::warningf(
+                    "Telemetry",
+                    "Payload retained in buffer. Queue size: %u/%u",
+                    telemetryBuffer.size(),
+                    telemetryBuffer.capacity()
+                );
+            }
+        }
     }
-
-    if (!wifiManager.isConnected()) {
-        Logger::errorf(
-            "Network",
-            "Network status: %s",
-            systemStatus.getNetworkStatusName()
+    else if (!wifiManager.isConnected()) {
+        Logger::warning(
+            "Telemetry",
+            "Transmission deferred: Wi-Fi unavailable"
         );
     }
 }
