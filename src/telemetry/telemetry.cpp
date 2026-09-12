@@ -25,6 +25,11 @@ String telemetryToJson(const TelemetryData& data) {
 
     json += "\"wifi_rssi\":";
     json += String(data.wifiRssi);
+    json += ",";
+
+    json += "\"health_state\":\"";
+    json += data.healthState;
+    json += "\"";
 
     json += "}";
 

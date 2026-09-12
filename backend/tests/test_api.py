@@ -41,6 +41,7 @@ def test_telemetry_submission(client):
             "temperature": 25.5,
             "humidity": 60.0,
             "wifi_rssi": -60,
+            "health_state": "HEALTHY",
         },
     )
 
@@ -62,6 +63,7 @@ def test_telemetry_retrieval(client):
             "temperature": 25.5,
             "humidity": 60.0,
             "wifi_rssi": -60,
+            "health_state": "HEALTHY",
         },
     )
 
@@ -83,6 +85,7 @@ def test_telemetry_retrieval(client):
     assert record["temperature"] == 25.5
     assert record["humidity"] == 60.0
     assert record["wifi_rssi"] == -60
+    assert record["health_state"] == "HEALTHY"
 
 def test_telemetry_rejects_missing_field(client):
     response = client.post(
@@ -93,6 +96,7 @@ def test_telemetry_rejects_missing_field(client):
             "uptime_ms": 5000,
             "temperature": 25.5,
             "humidity": 60.0,
+            "health_state": "HEALTHY",
         },
     )
 
@@ -113,6 +117,7 @@ def test_telemetry_rejects_invalid_type(client):
             "temperature": 25.5,
             "humidity": 60.0,
             "wifi_rssi": -60,
+            "health_state": "HEALTHY",
         },
     )
 
@@ -134,6 +139,7 @@ def test_telemetry_rejects_invalid_range(client):
             "temperature": 25.5,
             "humidity": 150.0,
             "wifi_rssi": -60,
+            "health_state": "HEALTHY",
         },
     )
 
@@ -170,6 +176,7 @@ def test_telemetry_rejects_json_array(client):
                 "temperature": 25.5,
                 "humidity": 60.0,
                 "wifi_rssi": -60,
+                "health_state": "HEALTHY",
             }
         ],
     )
@@ -191,6 +198,7 @@ def test_telemetry_rejects_boolean_uptime(client):
             "temperature": 25.5,
             "humidity": 60.0,
             "wifi_rssi": -60,
+            "health_state": "HEALTHY",
         },
     )
 
@@ -212,6 +220,7 @@ def test_telemetry_rejects_device_id_too_long(client):
             "temperature": 25.5,
             "humidity": 60.0,
             "wifi_rssi": -60,
+            "health_state": "HEALTHY",
         },
     )
 
@@ -235,6 +244,7 @@ def test_telemetry_rejects_firmware_version_too_long(client):
             "temperature": 25.5,
             "humidity": 60.0,
             "wifi_rssi": -60,
+            "health_state": "HEALTHY",
         },
     )
 
@@ -258,6 +268,7 @@ def test_telemetry_normalizes_string_fields(client):
             "temperature": 25.5,
             "humidity": 60.0,
             "wifi_rssi": -60,
+            "health_state": "HEALTHY",
         },
     )
 
@@ -298,6 +309,7 @@ def test_telemetry_retrieval_respects_limit(client):
                 "temperature": 25.5,
                 "humidity": 60.0,
                 "wifi_rssi": -60,
+                "health_state": "HEALTHY",
             },
         )
 
@@ -345,6 +357,7 @@ def test_telemetry_retrieval_uses_default_limit(client):
                 "temperature": 25.5,
                 "humidity": 60.0,
                 "wifi_rssi": -60,
+                "health_state": "HEALTHY",
             },
         )
 
@@ -369,3 +382,5 @@ def test_telemetry_retrieval_rejects_non_integer_limit(client):
 
     assert data["status"] == "error"
     assert data["message"] == "limit must be an integer"
+
+    

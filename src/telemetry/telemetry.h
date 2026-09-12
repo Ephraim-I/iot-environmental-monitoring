@@ -13,6 +13,8 @@ struct TelemetryData {
     float humidity;
 
     int wifiRssi;
+
+    const char* healthState;
 };
 
 String telemetryToJson(const TelemetryData& data);

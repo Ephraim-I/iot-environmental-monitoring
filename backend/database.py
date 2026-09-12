@@ -24,6 +24,7 @@ def initialize_database():
             temperature REAL NOT NULL,
             humidity REAL NOT NULL,
             wifi_rssi INTEGER NOT NULL,
+            health_state TEXT NOT NULL,
             received_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
         """
@@ -59,6 +60,14 @@ def initialize_database():
             """
         )
 
+    if "health_state" not in column_names:
+        connection.execute(
+            """
+            ALTER TABLE telemetry
+            ADD COLUMN health_state TEXT
+            """
+        )
+
     connection.commit()
     connection.close()
 
@@ -70,6 +79,7 @@ def save_telemetry(
     temperature,
     humidity,
     wifi_rssi,
+    health_state,
 ):
     connection = get_connection()
 
@@ -82,9 +92,10 @@ def save_telemetry(
                 uptime_ms,
                 temperature,
                 humidity,
-                wifi_rssi
+                wifi_rssi,
+                health_state
             )
-            VALUES (?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 device_id,
@@ -93,6 +104,7 @@ def save_telemetry(
                 temperature,
                 humidity,
                 wifi_rssi,
+                health_state,
             ),
         )
 
@@ -118,6 +130,7 @@ def fetch_telemetry(limit):
                 temperature,
                 humidity,
                 wifi_rssi,
+                health_state,
                 received_at
             FROM telemetry
             ORDER BY id DESC

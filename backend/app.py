@@ -34,6 +34,7 @@ def receive_telemetry():
         "temperature",
         "humidity",
         "wifi_rssi",
+        "health_state",
     ]
 
     missing_fields = [
@@ -85,6 +86,11 @@ def receive_telemetry():
             "message": "wifi_rssi must be an integer",
         }), 400
 
+    if not isinstance(data["health_state"], str):
+        return jsonify({
+            "status": "error",
+            "message": "health_state must be a string",
+        }), 400
 
 
 
@@ -136,6 +142,18 @@ def receive_telemetry():
             "message": "wifi_rssi is outside the supported range",
         }), 400
 
+    valid_health_states = {
+        "HEALTHY",
+        "DEGRADED",
+        "FAULT",
+    }
+
+    if data["health_state"] not in valid_health_states:
+        return jsonify({
+            "status": "error",
+            "message": "health_state must be one of HEALTHY, DEGRADED, FAULT",
+        }), 400
+
     data["device_id"] = data["device_id"].strip()
     data["firmware_version"] = data["firmware_version"].strip()
 
@@ -146,6 +164,7 @@ def receive_telemetry():
         temperature=data["temperature"],
         humidity=data["humidity"],
         wifi_rssi=data["wifi_rssi"],
+        health_state=data["health_state"],
     )
 
     print("Telemetry received:")

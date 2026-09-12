@@ -19,7 +19,8 @@ def make_row(values):
             ? AS uptime_ms,
             ? AS temperature,
             ? AS humidity,
-            ? AS wifi_rssi
+            ? AS wifi_rssi,
+            ? AS health_state
         """,
         values,
     )
@@ -36,10 +37,10 @@ def test_fetch_telemetry_returns_records():
 
     mock_cursor.fetchall.return_value = [
         make_row(
-            (1, "TEST-001", "1.0.0", 5000, 25.5, 60.0, -60)
+            (1, "TEST-001", "1.0.0", 5000, 25.5, 60.0, -60, "HEALTHY")
         ),
         make_row(
-            (2, "TEST-002", "1.0.1", 6000, 26.0, 55.0, -65)
+            (2, "TEST-002", "1.0.1", 6000, 26.0, 55.0, -65, "HEALTHY")
         ),
     ]
 
@@ -62,10 +63,10 @@ def test_fetch_telemetry_respects_limit():
 
     mock_cursor.fetchall.return_value = [
         make_row(
-            (1, "TEST-001", "1.0.0", 5000, 25.5, 60.0, -60)
+            (1, "TEST-001", "1.0.0", 5000, 25.5, 60.0, -60, "HEALTHY")
         ),
         make_row(
-            (2, "TEST-002", "1.0.1", 6000, 26.0, 55.0, -65)
+            (2, "TEST-002", "1.0.1", 6000, 26.0, 55.0, -65, "HEALTHY")
         ),
     ]
 
@@ -93,13 +94,13 @@ def test_fetch_telemetry_returns_newest_records_first():
 
     mock_cursor.fetchall.return_value = [
         make_row(
-            (3, "TEST-003", "1.0.2", 7000, 27.0, 50.0, -70)
+            (3, "TEST-003", "1.0.2", 7000, 27.0, 50.0, -70, "HEALTHY")
         ),
         make_row(
-            (2, "TEST-002", "1.0.1", 6000, 26.0, 55.0, -65)
+            (2, "TEST-002", "1.0.1", 6000, 26.0, 55.0, -65, "HEALTHY")
         ),
         make_row(
-            (1, "TEST-001", "1.0.0", 5000, 25.5, 60.0, -60)
+            (1, "TEST-001", "1.0.0", 5000, 25.5, 60.0, -60, "HEALTHY")
         ),
     ]
 
@@ -135,6 +136,7 @@ def test_save_telemetry_closes_connection_on_success():
             25.5,
             60.0,
             -60,
+            "HEALTHY",
         )
 
     assert record_id == 123
@@ -161,6 +163,7 @@ def test_save_telemetry_closes_connection_on_database_error():
                 25.5,
                 60.0,
                 -60,
+                "HEALTHY",
             )
 
     mock_connection.close.assert_called_once()

@@ -18,6 +18,8 @@
 #include <TelemetryBuffer.h>
 #include <telemetry_metrics.h>
 
+#include <device_health.h>
+
 
 DHT11Sensor environmentSensor(DHT11_PIN);
 
@@ -38,15 +40,29 @@ bool telemetryRetryActive = false;
 uint8_t telemetryRetryAttempt = 0;
 unsigned long telemetryRetryNextAttempt = 0;
 
+bool telemetryReplayBackoffActive = false;
+unsigned long telemetryReplayNextAttempt = 0;
+uint8_t telemetryReplayFailureCount = 0;
+
 unsigned long lastMetricsReport = 0;
+unsigned long lastHealthReport = 0;
 
 #define METRICS_REPORT_INTERVAL_MS 30000
+#define HEALTH_REPORT_INTERVAL_MS 30000
+#define TELEMETRY_REPLAY_INITIAL_DELAY_MS 1000
+#define TELEMETRY_REPLAY_MAX_DELAY_MS 10000
 
 HttpResult transmissionResult = HttpResult::TRANSPORT_ERROR;
 
 
 TelemetryBuffer telemetryBuffer;
 TelemetryMetrics telemetryMetrics;
+DeviceHealth deviceHealth;
+
+DeviceHealthState previousHealthState =
+    DeviceHealthState::HEALTHY;
+
+unsigned long lastHealthEvaluation = 0;
 
 bool processTelemetryQueue();
 
@@ -58,6 +74,20 @@ bool processTelemetryQueue() {
     }
 
     if (telemetryBuffer.isEmpty()) {
+        telemetryReplayBackoffActive = false;
+        telemetryReplayFailureCount = 0;
+        return false;
+    }
+
+    unsigned long currentTime = millis();
+
+    /*
+     * Respect replay backoff timer.
+     */
+    if (
+        telemetryReplayBackoffActive &&
+        currentTime < telemetryReplayNextAttempt
+    ) {
         return false;
     }
 
@@ -79,6 +109,46 @@ bool processTelemetryQueue() {
 
     if (result == HttpResult::TRANSPORT_ERROR) {
         telemetryMetrics.transportFailures++;
+
+        telemetryReplayFailureCount++;
+
+        unsigned long retryDelay =
+            TELEMETRY_REPLAY_INITIAL_DELAY_MS;
+
+        /*
+         * Exponential backoff:
+         *
+         * Failure 1 -> 1 second
+         * Failure 2 -> 2 seconds
+         * Failure 3 -> 4 seconds
+         * Failure 4 -> 8 seconds
+         * Failure 5+ -> 10 seconds maximum
+         */
+        for (
+            uint8_t i = 1;
+            i < telemetryReplayFailureCount;
+            i++
+        ) {
+            retryDelay *= 2;
+
+            if (retryDelay >= TELEMETRY_REPLAY_MAX_DELAY_MS) {
+                retryDelay = TELEMETRY_REPLAY_MAX_DELAY_MS;
+                break;
+            }
+        }
+
+        telemetryReplayNextAttempt =
+            currentTime + retryDelay;
+
+        telemetryReplayBackoffActive = true;
+
+        Logger::warningf(
+            "Telemetry",
+            "Queued telemetry transmission failed. Payload retained. Next retry in %lu ms",
+            retryDelay
+        );
+
+        return false;
     }
 
     if (result == HttpResult::SUCCESS) {
@@ -87,6 +157,12 @@ bool processTelemetryQueue() {
         telemetryBuffer.dequeue(transmittedPayload);
 
         telemetryMetrics.successfulTransmissions++;
+
+        /*
+         * Successful replay clears the replay backoff.
+         */
+        telemetryReplayBackoffActive = false;
+        telemetryReplayFailureCount = 0;
 
         Logger::infof(
             "Telemetry",
@@ -98,9 +174,12 @@ bool processTelemetryQueue() {
         return true;
     }
 
+    /*
+     * Server rejection is not treated as a transport retry.
+     */
     Logger::warning(
         "Telemetry",
-        "Queued telemetry transmission failed. Payload retained"
+        "Queued telemetry rejected by server. Payload retained"
     );
 
     return false;
@@ -143,6 +222,77 @@ void reportTelemetryMetrics() {
     );
 }
 
+void reportDeviceHealth() {
+    DeviceHealthState currentHealthState =
+        evaluateDeviceHealth(deviceHealth);
+
+    deviceHealth.healthEvaluations++;
+
+    unsigned long currentTime = millis();
+
+    if (lastHealthEvaluation != 0) {
+        unsigned long elapsedTime =
+            currentTime - lastHealthEvaluation;
+
+        updateDeviceHealthDuration(
+            deviceHealth,
+            previousHealthState,
+            elapsedTime
+        );
+    }
+
+    lastHealthEvaluation = currentTime;
+
+    if (hasDeviceHealthStateChanged(
+            previousHealthState,
+            currentHealthState
+        )) {
+
+        updateDeviceHealthCounters(
+            deviceHealth,
+            previousHealthState,
+            currentHealthState
+        );
+
+        Logger::warningf(
+            "Health",
+            "Health state changed: %s -> %s",
+            getDeviceHealthStateName(previousHealthState),
+            getDeviceHealthStateName(currentHealthState)
+        );
+
+        previousHealthState = currentHealthState;
+    }
+
+    Logger::infof(
+        "Health",
+        "State: %s | Uptime: %lu ms | System: %s | Network: %s | RSSI: %d dBm | Sensor: %s",
+        getDeviceHealthStateName(currentHealthState),
+        deviceHealth.uptimeMs,
+        systemStatus.getStatusName(),
+        systemStatus.getNetworkStatusName(),
+        deviceHealth.wifiRssi,
+        deviceHealth.sensorHealthy ? "HEALTHY" : "ERROR"
+    );
+
+    Logger::infof(
+        "Health",
+        "Events: Degraded: %lu | Faults: %lu | Recoveries: %lu | Evaluations: %lu",
+        deviceHealth.degradedEvents,
+        deviceHealth.faultEvents,
+        deviceHealth.recoveryEvents,
+        deviceHealth.healthEvaluations
+    );
+
+    Logger::infof(
+        "Health",
+        "Duration: Healthy: %lu ms | Degraded: %lu ms | Fault: %lu ms",
+        deviceHealth.healthyDurationMs,
+        deviceHealth.degradedDurationMs,
+        deviceHealth.faultDurationMs
+    );
+}
+
 void setup() {
     Serial.begin(SERIAL_BAUD_RATE);
 
@@ -159,6 +309,7 @@ void setup() {
     wifiManager.begin();
 
     resetTelemetryMetrics(telemetryMetrics);
+    resetDeviceHealth(deviceHealth);
 
     if (wifiManager.isConnected()) {
         systemStatus.setNetworkStatus(
@@ -181,6 +332,8 @@ void setup() {
     );
 
     systemStatus.setStatus(SystemStatus::RUNNING);
+
+    deviceHealth.sensorHealthy = true;
 
     Logger::infof(
         "System",
@@ -205,6 +358,11 @@ void loop() {
         reportTelemetryMetrics();
     }
 
+    if (currentTime - lastHealthReport >= HEALTH_REPORT_INTERVAL_MS) {
+        lastHealthReport = currentTime;
+        reportDeviceHealth();
+    }
+
     /*
      * Maintain Wi-Fi connection.
      */
@@ -222,11 +380,23 @@ void loop() {
         systemStatus.setNetworkStatus(
             NetworkStatus::DISCONNECTED
         );
+        Logger::warning("WiFi", "Wi-Fi disconnected");
     }
+
+    deviceHealth.uptimeMs = currentTime;
+
+    deviceHealth.systemStatus = static_cast<DeviceSystemStatus>(
+        systemStatus.getStatus()
+    );
+
+    deviceHealth.networkStatus = static_cast<DeviceNetworkStatus>(
+        systemStatus.getNetworkStatus()
+    );
+
+    deviceHealth.wifiRssi = wifiManager.getRSSI();
 
     if (!telemetryRetryActive && !telemetryBuffer.isEmpty()) {
         processTelemetryQueue();
-        return;
     }
 
     /*
@@ -348,6 +518,8 @@ void loop() {
     DHT11Reading reading = environmentSensor.read();
 
     if (!reading.valid) {
+        deviceHealth.sensorHealthy = false;
+
         digitalWrite(STATUS_LED_PIN, LOW);
 
         systemStatus.setStatus(
@@ -375,6 +547,8 @@ void loop() {
         SystemStatus::RUNNING
     );
 
+    deviceHealth.sensorHealthy = true;
+
     digitalWrite(STATUS_LED_PIN, HIGH);
 
     Logger::infof(
@@ -390,6 +564,16 @@ void loop() {
     );
 
     /*
+     * Evaluate current device health before
+     * creating the telemetry sample.
+     */
+    DeviceHealthState currentHealthState =
+        evaluateDeviceHealth(deviceHealth);
+
+    const char* healthState =
+        getDeviceHealthStateName(currentHealthState);
+
+    /*
      * Build telemetry object.
      */
     TelemetryData telemetry{
@@ -398,7 +582,8 @@ void loop() {
         millis(),
         reading.temperature,
         reading.humidity,
-        wifiManager.getRSSI()
+        wifiManager.getRSSI(),
+        healthState
     };
 
     /*
