@@ -3,6 +3,7 @@ from backend.database import (
     initialize_database,
     save_telemetry,
     fetch_telemetry,
+    get_health_summary,
 )
 
 app = Flask(__name__)
@@ -220,3 +221,14 @@ if __name__ == "__main__":
         port=5000,
         debug=False,
     )
+
+
+
+@app.get("/api/telemetry/health")
+def get_health():
+    summary = get_health_summary()
+
+    return jsonify({
+        "status": "success",
+        "data": summary,
+    })

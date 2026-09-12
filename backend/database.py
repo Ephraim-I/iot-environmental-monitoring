@@ -143,3 +143,34 @@ def fetch_telemetry(limit):
 
     finally:
         connection.close()
+
+
+def get_health_summary():
+    connection = get_connection()
+
+    try:
+        rows = connection.execute(
+            """
+            SELECT
+                health_state,
+                COUNT(*) AS count
+            FROM telemetry
+            WHERE health_state IS NOT NULL
+            GROUP BY health_state
+            """
+        ).fetchall()
+
+        summary = {
+            "HEALTHY": 0,
+            "DEGRADED": 0,
+            "FAULT": 0,
+        }
+
+        for row in rows:
+            summary[row["health_state"]] = row["count"]
+
+        return summary
+
+    finally:
+        connection.close()
+        

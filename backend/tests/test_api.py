@@ -1,5 +1,7 @@
 import pytest
 
+from unittest.mock import patch
+
 from backend.app import app
 from backend.database import initialize_database
 
@@ -383,4 +385,110 @@ def test_telemetry_retrieval_rejects_non_integer_limit(client):
     assert data["status"] == "error"
     assert data["message"] == "limit must be an integer"
 
+
+def test_health_summary_returns_health_state_counts(client):
+    with patch(
+        "backend.app.get_health_summary",
+        return_value={
+            "HEALTHY": 12,
+            "DEGRADED": 3,
+            "FAULT": 1,
+        },
+    ):
+        response = client.get("/api/telemetry/health")
+
+    assert response.status_code == 200
+
+    body = response.get_json()
+
+    assert body["status"] == "success"
+    assert body["data"] == {
+        "HEALTHY": 12,
+        "DEGRADED": 3,
+        "FAULT": 1,
+    }
+
+
+def test_health_summary_returns_zero_counts_when_empty(client):
+    with patch(
+        "backend.app.get_health_summary",
+        return_value={
+            "HEALTHY": 0,
+            "DEGRADED": 0,
+            "FAULT": 0,
+        },
+    ):
+        response = client.get("/api/telemetry/health")
+
+    assert response.status_code == 200
+
+    body = response.get_json()
+
+    assert body["status"] == "success"
+    assert body["data"] == {
+        "HEALTHY": 0,
+        "DEGRADED": 0,
+        "FAULT": 0,
+    }
     
+
+def test_health_summary_aggregates_real_telemetry(client):
+    telemetry_records = [
+        {
+            "device_id": "TEST-001",
+            "firmware_version": "1.0.0",
+            "uptime_ms": 5000,
+            "temperature": 25.5,
+            "humidity": 60.0,
+            "wifi_rssi": -60,
+            "health_state": "HEALTHY",
+        },
+        {
+            "device_id": "TEST-002",
+            "firmware_version": "1.0.0",
+            "uptime_ms": 6000,
+            "temperature": 26.0,
+            "humidity": 55.0,
+            "wifi_rssi": -65,
+            "health_state": "DEGRADED",
+        },
+        {
+            "device_id": "TEST-003",
+            "firmware_version": "1.0.0",
+            "uptime_ms": 7000,
+            "temperature": 27.0,
+            "humidity": 50.0,
+            "wifi_rssi": -70,
+            "health_state": "FAULT",
+        },
+        {
+            "device_id": "TEST-004",
+            "firmware_version": "1.0.0",
+            "uptime_ms": 8000,
+            "temperature": 28.0,
+            "humidity": 45.0,
+            "wifi_rssi": -75,
+            "health_state": "HEALTHY",
+        },
+    ]
+
+    for telemetry in telemetry_records:
+        response = client.post(
+            "/api/telemetry",
+            json=telemetry,
+        )
+
+        assert response.status_code == 201
+
+    response = client.get("/api/telemetry/health")
+
+    assert response.status_code == 200
+
+    body = response.get_json()
+
+    assert body["status"] == "success"
+    assert body["data"] == {
+        "HEALTHY": 2,
+        "DEGRADED": 1,
+        "FAULT": 1,
+    }
