@@ -19,6 +19,7 @@
 #include <telemetry_metrics.h>
 
 #include <device_health.h>
+#include <telemetry_anomaly.h>
 
 
 DHT11Sensor environmentSensor(DHT11_PIN);
@@ -46,6 +47,13 @@ uint8_t telemetryReplayFailureCount = 0;
 
 unsigned long lastMetricsReport = 0;
 unsigned long lastHealthReport = 0;
+
+bool hasPreviousTelemetry = false;
+
+float previousTemperature = 0.0f;
+float previousHumidity = 0.0f;
+
+unsigned long previousTelemetryTime = 0;
 
 #define METRICS_REPORT_INTERVAL_MS 30000
 #define HEALTH_REPORT_INTERVAL_MS 30000
@@ -562,6 +570,48 @@ void loop() {
         "Humidity: %.1f %%",
         reading.humidity
     );
+
+    unsigned long currentTelemetryTime = millis();
+
+    if (hasPreviousTelemetry) {
+        unsigned long elapsedMs =
+            currentTelemetryTime - previousTelemetryTime;
+
+        TelemetryAnomalyResult anomaly =
+            detectTelemetryAnomaly(
+                reading.temperature,
+                reading.humidity,
+                previousTemperature,
+                previousHumidity,
+                elapsedMs
+        );
+
+        if (anomaly.hasAnomaly) {
+            if (anomaly.temperatureAnomaly) {
+                Logger::warning(
+                    "Anomaly", 
+                    "Temperature anomaly detected"
+                ); 
+            }
+
+            if (anomaly.humidityAnomaly) {
+                Logger::warning(
+                    "Anomaly", 
+                    "Humidity anomaly detected"
+                );
+            }
+        } else {
+            Logger::info(
+                "Anomaly", 
+                "No anomaly detected"
+            );
+        }
+    }
+
+    previousTemperature = reading.temperature;
+    previousHumidity = reading.humidity;
+    previousTelemetryTime = currentTelemetryTime;
+    hasPreviousTelemetry = true;
 
     /*
      * Evaluate current device health before
