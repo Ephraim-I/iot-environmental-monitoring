@@ -15,6 +15,7 @@ struct TelemetryData {
     int wifiRssi;
 
     const char* healthState;
+    bool anomalyDetected;
 };
 
 String telemetryToJson(const TelemetryData& data);

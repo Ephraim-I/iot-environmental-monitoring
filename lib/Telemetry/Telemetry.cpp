@@ -1,4 +1,4 @@
-#include "telemetry.h"
+#include "Telemetry.h"
 
 String telemetryToJson(const TelemetryData& data) {
     String json = "{";
@@ -30,6 +30,9 @@ String telemetryToJson(const TelemetryData& data) {
     json += "\"health_state\":\"";
     json += data.healthState;
     json += "\"";
+
+    json += ",\"anomaly_detected\":";
+    json += data.anomalyDetected ? "true" : "false";
 
     json += "}";
 

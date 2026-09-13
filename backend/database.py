@@ -25,6 +25,7 @@ def initialize_database():
             humidity REAL NOT NULL,
             wifi_rssi INTEGER NOT NULL,
             health_state TEXT NOT NULL,
+            anomaly_detected INTEGER NOT NULL,
             received_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
         """
@@ -68,6 +69,11 @@ def initialize_database():
             """
         )
 
+    if "anomaly_detected" not in column_names:
+        connection.execute(
+            """ALTER TABLE telemetry ADD COLUMN anomaly_detected INTEGER"""
+        )
+
     connection.commit()
     connection.close()
 
@@ -80,6 +86,7 @@ def save_telemetry(
     humidity,
     wifi_rssi,
     health_state,
+    anomaly_detected,
 ):
     connection = get_connection()
 
@@ -93,9 +100,10 @@ def save_telemetry(
                 temperature,
                 humidity,
                 wifi_rssi,
-                health_state
+                health_state,
+                anomaly_detected
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 device_id,
@@ -105,6 +113,7 @@ def save_telemetry(
                 humidity,
                 wifi_rssi,
                 health_state,
+                anomaly_detected,
             ),
         )
 
@@ -131,6 +140,7 @@ def fetch_telemetry(limit):
                 humidity,
                 wifi_rssi,
                 health_state,
+                anomaly_detected,
                 received_at
             FROM telemetry
             ORDER BY id DESC
@@ -139,7 +149,17 @@ def fetch_telemetry(limit):
             (limit,),
         ).fetchall()
 
-        return [dict(row) for row in rows]
+        records = []
+
+        for row in rows:
+            record = dict(row)
+
+            if record["anomaly_detected"] is not None:
+                record["anomaly_detected"] = bool(record["anomaly_detected"])
+
+            records.append(record)
+
+        return records
 
     finally:
         connection.close()
@@ -173,4 +193,3 @@ def get_health_summary():
 
     finally:
         connection.close()
-        

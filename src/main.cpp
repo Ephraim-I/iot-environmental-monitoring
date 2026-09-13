@@ -9,8 +9,8 @@
 
 #include "sensors/dht11_sensor.h"
 
-#include "telemetry/telemetry.h"
-#include "telemetry/retry_policy.h"
+#include <Telemetry.h>
+#include <RetryPolicy.h>
 
 #include "network/wifi_manager.h"
 #include "network/http_client.h"
@@ -573,6 +573,8 @@ void loop() {
 
     unsigned long currentTelemetryTime = millis();
 
+    bool anomalyDetected = false;
+
     if (hasPreviousTelemetry) {
         unsigned long elapsedMs =
             currentTelemetryTime - previousTelemetryTime;
@@ -585,6 +587,8 @@ void loop() {
                 previousHumidity,
                 elapsedMs
         );
+
+        anomalyDetected = anomaly.hasAnomaly;
 
         if (anomaly.hasAnomaly) {
             if (anomaly.temperatureAnomaly) {
@@ -633,19 +637,18 @@ void loop() {
         reading.temperature,
         reading.humidity,
         wifiManager.getRSSI(),
-        healthState
+        healthState,
+        anomalyDetected
     };
+
 
     /*
      * Convert telemetry to JSON.
      */
+
     String payload = telemetryToJson(telemetry);
 
-    Logger::infof(
-        "Telemetry",
-        "Payload: %s",
-        payload.c_str()
-    );
+    Logger::info("Telemetry", payload.c_str());
 
     /*
      * Store telemetry payload for transmission.

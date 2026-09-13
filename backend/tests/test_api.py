@@ -44,6 +44,7 @@ def test_telemetry_submission(client):
             "humidity": 60.0,
             "wifi_rssi": -60,
             "health_state": "HEALTHY",
+            "anomaly_detected": False,
         },
     )
 
@@ -66,6 +67,7 @@ def test_telemetry_retrieval(client):
             "humidity": 60.0,
             "wifi_rssi": -60,
             "health_state": "HEALTHY",
+            "anomaly_detected": False,
         },
     )
 
@@ -88,6 +90,7 @@ def test_telemetry_retrieval(client):
     assert record["humidity"] == 60.0
     assert record["wifi_rssi"] == -60
     assert record["health_state"] == "HEALTHY"
+    assert record["anomaly_detected"] is False
 
 def test_telemetry_rejects_missing_field(client):
     response = client.post(
@@ -99,6 +102,7 @@ def test_telemetry_rejects_missing_field(client):
             "temperature": 25.5,
             "humidity": 60.0,
             "health_state": "HEALTHY",
+            "anomaly_detected": False,
         },
     )
 
@@ -120,6 +124,7 @@ def test_telemetry_rejects_invalid_type(client):
             "humidity": 60.0,
             "wifi_rssi": -60,
             "health_state": "HEALTHY",
+            "anomaly_detected": False,
         },
     )
 
@@ -142,6 +147,7 @@ def test_telemetry_rejects_invalid_range(client):
             "humidity": 150.0,
             "wifi_rssi": -60,
             "health_state": "HEALTHY",
+            "anomaly_detected": False,
         },
     )
 
@@ -179,6 +185,7 @@ def test_telemetry_rejects_json_array(client):
                 "humidity": 60.0,
                 "wifi_rssi": -60,
                 "health_state": "HEALTHY",
+                "anomaly_detected": False,
             }
         ],
     )
@@ -201,6 +208,7 @@ def test_telemetry_rejects_boolean_uptime(client):
             "humidity": 60.0,
             "wifi_rssi": -60,
             "health_state": "HEALTHY",
+            "anomaly_detected": False,
         },
     )
 
@@ -223,6 +231,7 @@ def test_telemetry_rejects_device_id_too_long(client):
             "humidity": 60.0,
             "wifi_rssi": -60,
             "health_state": "HEALTHY",
+            "anomaly_detected": False,
         },
     )
 
@@ -247,6 +256,7 @@ def test_telemetry_rejects_firmware_version_too_long(client):
             "humidity": 60.0,
             "wifi_rssi": -60,
             "health_state": "HEALTHY",
+            "anomaly_detected": False,
         },
     )
 
@@ -271,6 +281,7 @@ def test_telemetry_normalizes_string_fields(client):
             "humidity": 60.0,
             "wifi_rssi": -60,
             "health_state": "HEALTHY",
+            "anomaly_detected": False,
         },
     )
 
@@ -312,6 +323,7 @@ def test_telemetry_retrieval_respects_limit(client):
                 "humidity": 60.0,
                 "wifi_rssi": -60,
                 "health_state": "HEALTHY",
+                "anomaly_detected": False,
             },
         )
 
@@ -360,6 +372,7 @@ def test_telemetry_retrieval_uses_default_limit(client):
                 "humidity": 60.0,
                 "wifi_rssi": -60,
                 "health_state": "HEALTHY",
+                "anomaly_detected": False,
             },
         )
 
@@ -430,7 +443,7 @@ def test_health_summary_returns_zero_counts_when_empty(client):
         "DEGRADED": 0,
         "FAULT": 0,
     }
-    
+
 
 def test_health_summary_aggregates_real_telemetry(client):
     telemetry_records = [
@@ -442,6 +455,7 @@ def test_health_summary_aggregates_real_telemetry(client):
             "humidity": 60.0,
             "wifi_rssi": -60,
             "health_state": "HEALTHY",
+            "anomaly_detected": False,
         },
         {
             "device_id": "TEST-002",
@@ -451,6 +465,7 @@ def test_health_summary_aggregates_real_telemetry(client):
             "humidity": 55.0,
             "wifi_rssi": -65,
             "health_state": "DEGRADED",
+            "anomaly_detected": False,
         },
         {
             "device_id": "TEST-003",
@@ -460,6 +475,7 @@ def test_health_summary_aggregates_real_telemetry(client):
             "humidity": 50.0,
             "wifi_rssi": -70,
             "health_state": "FAULT",
+            "anomaly_detected": False,
         },
         {
             "device_id": "TEST-004",
@@ -469,6 +485,7 @@ def test_health_summary_aggregates_real_telemetry(client):
             "humidity": 45.0,
             "wifi_rssi": -75,
             "health_state": "HEALTHY",
+            "anomaly_detected": False,
         },
     ]
 
@@ -492,3 +509,58 @@ def test_health_summary_aggregates_real_telemetry(client):
         "DEGRADED": 1,
         "FAULT": 1,
     }
+
+def test_telemetry_rejects_invalid_anomaly_type(client):
+    response = client.post(
+        "/api/telemetry",
+        json={
+            "device_id": "TEST-001",
+            "firmware_version": "1.0.0",
+            "uptime_ms": 5000,
+            "temperature": 25.5,
+            "humidity": 60.0,
+            "wifi_rssi": -60,
+            "health_state": "HEALTHY",
+            "anomaly_detected": "false",
+        },
+    )
+
+    assert response.status_code == 400
+
+    data = response.get_json()
+
+    assert data["status"] == "error"
+    assert data["message"] == "anomaly_detected must be a boolean"
+
+def test_telemetry_persists_anomaly_state(client):
+    response = client.post(
+        "/api/telemetry",
+        json={
+            "device_id": "TEST-ANOMALY-001",
+            "firmware_version": "1.0.0",
+            "uptime_ms": 5000,
+            "temperature": 45.0,
+            "humidity": 60.0,
+            "wifi_rssi": -60,
+            "health_state": "HEALTHY",
+            "anomaly_detected": True,
+        },
+    )
+
+    assert response.status_code == 201
+
+    record_id = response.get_json()["record_id"]
+
+    response = client.get("/api/telemetry")
+
+    assert response.status_code == 200
+
+    records = response.get_json()["data"]
+
+    record = next(
+        record for record in records
+        if record["id"] == record_id
+    )
+
+    assert record["health_state"] == "HEALTHY"
+    assert record["anomaly_detected"] is True

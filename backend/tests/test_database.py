@@ -24,7 +24,8 @@ def make_row(values):
             ? AS temperature,
             ? AS humidity,
             ? AS wifi_rssi,
-            ? AS health_state
+            ? AS health_state,
+            ? AS anomaly_detected
         """,
         values,
     )
@@ -41,10 +42,10 @@ def test_fetch_telemetry_returns_records():
 
     mock_cursor.fetchall.return_value = [
         make_row(
-            (1, "TEST-001", "1.0.0", 5000, 25.5, 60.0, -60, "HEALTHY")
+            (1, "TEST-001", "1.0.0", 5000, 25.5, 60.0, -60, "HEALTHY", False)
         ),
         make_row(
-            (2, "TEST-002", "1.0.1", 6000, 26.0, 55.0, -65, "HEALTHY")
+            (2, "TEST-002", "1.0.1", 6000, 26.0, 55.0, -65, "HEALTHY", False)
         ),
     ]
 
@@ -67,10 +68,10 @@ def test_fetch_telemetry_respects_limit():
 
     mock_cursor.fetchall.return_value = [
         make_row(
-            (1, "TEST-001", "1.0.0", 5000, 25.5, 60.0, -60, "HEALTHY")
+            (1, "TEST-001", "1.0.0", 5000, 25.5, 60.0, -60, "HEALTHY", False)
         ),
         make_row(
-            (2, "TEST-002", "1.0.1", 6000, 26.0, 55.0, -65, "HEALTHY")
+            (2, "TEST-002", "1.0.1", 6000, 26.0, 55.0, -65, "HEALTHY", False)
         ),
     ]
 
@@ -98,13 +99,13 @@ def test_fetch_telemetry_returns_newest_records_first():
 
     mock_cursor.fetchall.return_value = [
         make_row(
-            (3, "TEST-003", "1.0.2", 7000, 27.0, 50.0, -70, "HEALTHY")
+            (3, "TEST-003", "1.0.2", 7000, 27.0, 50.0, -70, "HEALTHY", False)
         ),
         make_row(
-            (2, "TEST-002", "1.0.1", 6000, 26.0, 55.0, -65, "HEALTHY")
+            (2, "TEST-002", "1.0.1", 6000, 26.0, 55.0, -65, "HEALTHY", False)
         ),
         make_row(
-            (1, "TEST-001", "1.0.0", 5000, 25.5, 60.0, -60, "HEALTHY")
+            (1, "TEST-001", "1.0.0", 5000, 25.5, 60.0, -60, "HEALTHY", False)
         ),
     ]
 
@@ -141,6 +142,7 @@ def test_save_telemetry_closes_connection_on_success():
             60.0,
             -60,
             "HEALTHY",
+            False,
         )
 
     assert record_id == 123
@@ -168,6 +170,7 @@ def test_save_telemetry_closes_connection_on_database_error():
                 60.0,
                 -60,
                 "HEALTHY",
+                False,
             )
 
     mock_connection.close.assert_called_once()
@@ -179,16 +182,16 @@ def test_get_health_summary_returns_health_state_counts():
 
     mock_cursor.fetchall.return_value = [
         make_row(
-            (1, "TEST-001", "1.0.0", 5000, 25.5, 60.0, -60, "HEALTHY")
+            (1, "TEST-001", "1.0.0", 5000, 25.5, 60.0, -60, "HEALTHY", False)
         ),
         make_row(
-            (2, "TEST-002", "1.0.0", 6000, 26.0, 55.0, -65, "HEALTHY")
+            (2, "TEST-002", "1.0.0", 6000, 26.0, 55.0, -65, "HEALTHY", False)
         ),
         make_row(
-            (3, "TEST-003", "1.0.0", 7000, 27.0, 50.0, -70, "DEGRADED")
+            (3, "TEST-003", "1.0.0", 7000, 27.0, 50.0, -70, "DEGRADED", False)
         ),
         make_row(
-            (4, "TEST-004", "1.0.0", 8000, 28.0, 45.0, -75, "FAULT")
+            (4, "TEST-004", "1.0.0", 8000, 28.0, 45.0, -75, "FAULT", False)
         ),
     ]
 

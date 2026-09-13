@@ -36,6 +36,7 @@ def receive_telemetry():
         "humidity",
         "wifi_rssi",
         "health_state",
+        "anomaly_detected",
     ]
 
     missing_fields = [
@@ -91,6 +92,12 @@ def receive_telemetry():
         return jsonify({
             "status": "error",
             "message": "health_state must be a string",
+        }), 400
+
+    if type(data["anomaly_detected"]) is not bool:
+        return jsonify({
+            "status": "error",
+            "message": "anomaly_detected must be a boolean",
         }), 400
 
 
@@ -166,6 +173,7 @@ def receive_telemetry():
         humidity=data["humidity"],
         wifi_rssi=data["wifi_rssi"],
         health_state=data["health_state"],
+        anomaly_detected=data["anomaly_detected"],
     )
 
     print("Telemetry received:")
