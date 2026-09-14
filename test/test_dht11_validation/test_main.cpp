@@ -2,7 +2,7 @@
 #include <unity.h>
 
 #include <MeasurementValidation.h>
-#include <DHT11Validation.h>
+#include <DHT11Config.h>
 
 
 void test_valid_dht11_temperature() {
@@ -16,7 +16,7 @@ void test_valid_dht11_temperature() {
     TEST_ASSERT_TRUE(
         validateMeasurement(
             measurement,
-            DHT11_TEMPERATURE_RULE
+            DHT11_DEFAULT_CONFIG.temperature
         )
     );
 }
@@ -33,7 +33,7 @@ void test_invalid_dht11_temperature() {
     TEST_ASSERT_FALSE(
         validateMeasurement(
             measurement,
-            DHT11_TEMPERATURE_RULE
+            DHT11_DEFAULT_CONFIG.temperature
         )
     );
 }
@@ -50,7 +50,7 @@ void test_valid_dht11_humidity() {
     TEST_ASSERT_TRUE(
         validateMeasurement(
             measurement,
-            DHT11_HUMIDITY_RULE
+            DHT11_DEFAULT_CONFIG.humidity
         )
     );
 }
@@ -67,7 +67,7 @@ void test_invalid_dht11_humidity() {
     TEST_ASSERT_FALSE(
         validateMeasurement(
             measurement,
-            DHT11_HUMIDITY_RULE
+            DHT11_DEFAULT_CONFIG.humidity
         )
     );
 }
@@ -76,7 +76,7 @@ void test_invalid_dht11_humidity() {
 void test_dht11_temperature_lower_boundary() {
     Measurement measurement{
         "temperature",
-        -40.0f,
+        0.0f,
         "C",
         true
     };
@@ -84,7 +84,7 @@ void test_dht11_temperature_lower_boundary() {
     TEST_ASSERT_TRUE(
         validateMeasurement(
             measurement,
-            DHT11_TEMPERATURE_RULE
+            DHT11_DEFAULT_CONFIG.temperature
         )
     );
 }
@@ -93,7 +93,7 @@ void test_dht11_temperature_lower_boundary() {
 void test_dht11_humidity_upper_boundary() {
     Measurement measurement{
         "humidity",
-        100.0f,
+        90.0f,
         "%RH",
         true
     };
@@ -101,7 +101,7 @@ void test_dht11_humidity_upper_boundary() {
     TEST_ASSERT_TRUE(
         validateMeasurement(
             measurement,
-            DHT11_HUMIDITY_RULE
+            DHT11_DEFAULT_CONFIG.humidity
         )
     );
 }

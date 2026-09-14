@@ -5,10 +5,17 @@
 #include <DHT.h>
 
 #include <Sensor.h>
+#include <DHT11Config.h>
 
 class DHT11Sensor : public Sensor {
 public:
-    explicit DHT11Sensor(uint8_t pin);
+    explicit DHT11Sensor(
+        const DHT11Config& config
+    );
+
+    explicit DHT11Sensor(
+        uint8_t pin
+    );
 
     bool begin() override;
 
@@ -20,7 +27,7 @@ public:
     ) override;
 
 private:
-    uint8_t _pin;
+    DHT11Config _config;
     DHT _dht;
     bool _initialized;
 };

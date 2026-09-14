@@ -1,9 +1,24 @@
 #include "dht11_sensor.h"
 
-DHT11Sensor::DHT11Sensor(uint8_t pin)
-    : _pin(pin),
-      _dht(pin, DHT11),
+DHT11Sensor::DHT11Sensor(
+    const DHT11Config& config
+)
+    : _config(config),
+      _dht(config.pin, DHT11),
       _initialized(false) {
+}
+
+DHT11Sensor::DHT11Sensor(
+    uint8_t pin
+)
+    : DHT11Sensor(
+        DHT11Config{
+            DHT11_DEFAULT_CONFIG.sensor,
+            DHT11_DEFAULT_CONFIG.temperature,
+            DHT11_DEFAULT_CONFIG.humidity,
+            pin
+        }
+    ) {
 }
 
 bool DHT11Sensor::begin() {
@@ -15,7 +30,7 @@ bool DHT11Sensor::begin() {
 }
 
 size_t DHT11Sensor::measurementCount() const {
-    return 2;
+    return _config.sensor.measurementCount;
 }
 
 bool DHT11Sensor::read(
@@ -30,7 +45,7 @@ bool DHT11Sensor::read(
         return false;
     }
 
-    if (maxMeasurements < 2) {
+    if (maxMeasurements < _config.sensor.measurementCount) {
         return false;
     }
 
@@ -41,16 +56,16 @@ bool DHT11Sensor::read(
     bool humidityValid = !isnan(humidity);
 
     measurements[0] = {
-        "temperature",
+        _config.temperature.name,
         temperature,
-        "C",
+        _config.temperature.unit,
         temperatureValid
     };
 
     measurements[1] = {
-        "humidity",
+        _config.humidity.name,
         humidity,
-        "%RH",
+        _config.humidity.unit,
         humidityValid
     };
 

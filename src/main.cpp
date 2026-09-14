@@ -9,6 +9,7 @@
 #include "device/logger.h"
 
 #include <dht11_sensor.h>
+#include <DHT11Config.h>
 
 #include <Telemetry.h>
 #include <RetryPolicy.h>
@@ -27,11 +28,11 @@
 
 #include <MeasurementConfig.h>
 #include <MeasurementLookup.h>
+#include <MeasurementValidation.h>
 
-#include <DHT11Validation.h>
-
-
-DHT11Sensor environmentSensor(DHT11_PIN);
+DHT11Sensor environmentSensor(
+    DHT11_DEFAULT_CONFIG
+);
 
 WiFiManager wifiManager(
     WIFI_SSID,
@@ -598,11 +599,11 @@ void loop() {
 
     if (!validateMeasurement(
             *temperatureMeasurement,
-            DHT11_TEMPERATURE_RULE
+            DHT11_DEFAULT_CONFIG.temperature
         ) ||
         !validateMeasurement(
             *humidityMeasurement,
-            DHT11_HUMIDITY_RULE
+            DHT11_DEFAULT_CONFIG.humidity
         )) {
 
         deviceHealth.sensorHealthy = false;
