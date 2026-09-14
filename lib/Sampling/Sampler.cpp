@@ -25,24 +25,28 @@ size_t Sampler::measurementCount() const {
     return _sensor.measurementCount();
 }
 
-bool Sampler::sample(
+SampleResult Sampler::sample(
     Measurement* measurements,
     size_t maxMeasurements
 ) {
     if (!_started) {
-        return false;
+        return SampleResult::FAILED;
     }
 
     unsigned long now = millis();
 
     if ((now - _lastSampleTime) < _config.intervalMs) {
-        return false;
+        return SampleResult::NOT_DUE;
     }
 
     _lastSampleTime = now;
 
-    return _sensor.read(
-        measurements,
-        maxMeasurements
-    );
+    if (!_sensor.read(
+            measurements,
+            maxMeasurements
+        )) {
+        return SampleResult::FAILED;
+    }
+
+    return SampleResult::SUCCESS;
 }

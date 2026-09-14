@@ -535,10 +535,26 @@ void loop() {
         MAX_MEASUREMENTS_PER_SAMPLE
     ];
 
-    if (!sensorSampler.sample(
+    SampleResult sampleResult =
+        sensorSampler.sample(
             measurements,
             MAX_MEASUREMENTS_PER_SAMPLE
-        )) {
+        );
+
+    if (sampleResult == SampleResult::NOT_DUE) {
+        return;
+    }
+
+    if (sampleResult == SampleResult::FAILED) {
+        deviceHealth.sensorHealthy = false;
+
+        Logger::error(
+            "Sensor",
+            "Sensor sampling failed"
+        );
+
+        reportDeviceHealth();
+
         return;
     }
 

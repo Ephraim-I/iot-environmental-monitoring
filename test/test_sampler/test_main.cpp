@@ -74,7 +74,8 @@ void test_sampler_does_not_sample_before_interval() {
 
     Measurement measurements[1];
 
-    TEST_ASSERT_FALSE(
+    TEST_ASSERT_EQUAL(
+        SampleResult::NOT_DUE,
         sampler.sample(measurements, 1)
     );
 
@@ -100,7 +101,8 @@ void test_sampler_samples_after_interval() {
 
     delay(60);
 
-    TEST_ASSERT_TRUE(
+    TEST_ASSERT_EQUAL(
+        SampleResult::SUCCESS,
         sampler.sample(measurements, 1)
     );
 
@@ -137,7 +139,8 @@ void test_sampler_does_not_sample_twice_within_interval() {
 
     delay(110);
 
-    TEST_ASSERT_TRUE(
+    TEST_ASSERT_EQUAL(
+        SampleResult::SUCCESS,
         sampler.sample(measurements, 1)
     );
 
@@ -146,7 +149,8 @@ void test_sampler_does_not_sample_twice_within_interval() {
         sensor.readCount
     );
 
-    TEST_ASSERT_FALSE(
+    TEST_ASSERT_EQUAL(
+        SampleResult::NOT_DUE,
         sampler.sample(measurements, 1)
     );
 
@@ -168,7 +172,8 @@ void test_sampler_rejects_sample_before_begin() {
 
     Measurement measurements[1];
 
-    TEST_ASSERT_FALSE(
+    TEST_ASSERT_EQUAL(
+        SampleResult::FAILED,
         sampler.sample(measurements, 1)
     );
 
@@ -212,7 +217,8 @@ void test_sampler_propagates_sensor_read_failure() {
 
     Measurement measurements[1];
 
-    TEST_ASSERT_FALSE(
+    TEST_ASSERT_EQUAL(
+        SampleResult::FAILED,
         sampler.sample(measurements, 1)
     );
 }

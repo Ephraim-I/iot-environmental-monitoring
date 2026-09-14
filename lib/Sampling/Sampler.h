@@ -5,6 +5,12 @@
 #include <Sensor.h>
 #include <SamplingConfig.h>
 
+enum class SampleResult {
+    NOT_DUE,
+    SUCCESS,
+    FAILED
+};
+
 class Sampler {
 public:
     Sampler(
@@ -16,7 +22,7 @@ public:
 
     size_t measurementCount() const;
 
-    bool sample(
+    SampleResult sample(
         Measurement* measurements,
         size_t maxMeasurements
     );
