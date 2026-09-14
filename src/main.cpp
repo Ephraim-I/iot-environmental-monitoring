@@ -3,11 +3,12 @@
 #include "config/device_config.h"
 #include "config/pins.h"
 #include "config/network_config.local.h"
+#include "config/sampling_config.h"
 
 #include "device/system_status.h"
 #include "device/logger.h"
 
-#include "sensors/dht11_sensor.h"
+#include <dht11_sensor.h>
 
 #include <Telemetry.h>
 #include <RetryPolicy.h>
@@ -20,6 +21,14 @@
 
 #include <device_health.h>
 #include <telemetry_anomaly.h>
+
+#include <Sampler.h>
+#include <SamplingConfig.h>
+
+#include <MeasurementConfig.h>
+#include <MeasurementLookup.h>
+
+#include <DHT11Validation.h>
 
 
 DHT11Sensor environmentSensor(DHT11_PIN);
@@ -35,7 +44,14 @@ HttpClient telemetryClient(
 
 SystemStatusManager systemStatus;
 
-unsigned long lastSensorRead = 0;
+SamplingConfig samplingConfig{
+    DEFAULT_SAMPLING_INTERVAL_MS
+};
+
+Sampler sensorSampler(
+    environmentSensor,
+    samplingConfig
+);
 
 bool telemetryRetryActive = false;
 uint8_t telemetryRetryAttempt = 0;
@@ -312,8 +328,6 @@ void setup() {
     Logger::info("System", "IoT Engineering Lab");
     Logger::info("System", "Environment Sensor Node");
 
-    environmentSensor.begin();
-
     wifiManager.begin();
 
     resetTelemetryMetrics(telemetryMetrics);
@@ -334,14 +348,31 @@ void setup() {
         );
     }
 
-    Logger::info(
-        "Sensor",
-        "DHT11 sensor initialized"
-    );
+    if (!sensorSampler.begin()) {
+        deviceHealth.sensorHealthy = false;
 
-    systemStatus.setStatus(SystemStatus::RUNNING);
+        systemStatus.setStatus(
+            SystemStatus::SENSOR_ERROR
+        );
 
-    deviceHealth.sensorHealthy = true;
+        Logger::error(
+            "Sensor",
+            "Failed to initialize sensor"
+        );
+    }
+    else {
+        deviceHealth.sensorHealthy = true;
+        Logger::info(
+            "Sensor",
+            "DHT11 sensor initialized"
+        );
+    }
+
+    if (deviceHealth.sensorHealthy) {
+        systemStatus.setStatus(
+            SystemStatus::RUNNING
+        );
+    }
 
     Logger::infof(
         "System",
@@ -458,7 +489,7 @@ void loop() {
 
             if (transmissionResult == HttpResult::TRANSPORT_ERROR) {
                 telemetryMetrics.transportFailures++;
-            }          
+            }
 
             if (transmissionResult == HttpResult::SUCCESS) {
                 Logger::info(
@@ -495,10 +526,10 @@ void loop() {
                     "Telemetry",
                     "Transmission failed after maximum attempts"
                 );
-            
+
                 telemetryRetryActive = false;
                 telemetryRetryAttempt = 0;
-            
+
                 Logger::warningf(
                     "Telemetry",
                     "Payload retained in buffer. Queue size: %u/%u",
@@ -512,31 +543,46 @@ void loop() {
     }
 
     /*
-     * Sensor sampling interval.
-     */
-    if (currentTime - lastSensorRead < SENSOR_READ_INTERVAL_MS) {
+    * Sample environmental sensor.
+    */
+    Measurement measurements[
+        MAX_MEASUREMENTS_PER_SAMPLE
+    ];
+
+    if (!sensorSampler.sample(
+            measurements,
+            MAX_MEASUREMENTS_PER_SAMPLE
+        )) {
         return;
     }
 
-    lastSensorRead = currentTime;
+    const size_t measurementCount =
+        sensorSampler.measurementCount();
 
-    /*
-     * Read environmental sensor.
-     */
-    DHT11Reading reading = environmentSensor.read();
-
-    if (!reading.valid) {
-        deviceHealth.sensorHealthy = false;
-
-        digitalWrite(STATUS_LED_PIN, LOW);
-
-        systemStatus.setStatus(
-            SystemStatus::SENSOR_ERROR
+    const Measurement* temperatureMeasurement =
+        findMeasurement(
+            measurements,
+            measurementCount,
+            "temperature"
         );
+
+    const Measurement* humidityMeasurement =
+        findMeasurement(
+            measurements,
+            measurementCount,
+            "humidity"
+        );
+
+    if (temperatureMeasurement == nullptr ||
+        humidityMeasurement == nullptr) {
+
+        deviceHealth.sensorHealthy = false;
+        digitalWrite(STATUS_LED_PIN, LOW);
+        systemStatus.setStatus(SystemStatus::SENSOR_ERROR);
 
         Logger::error(
             "Sensor",
-            "Failed to read DHT11 sensor"
+            "Required environmental measurements missing"
         );
 
         Logger::errorf(
@@ -547,6 +593,36 @@ void loop() {
 
         return;
     }
+
+    if (!validateMeasurement(
+            *temperatureMeasurement,
+            DHT11_TEMPERATURE_RULE
+        ) ||
+        !validateMeasurement(
+            *humidityMeasurement,
+            DHT11_HUMIDITY_RULE
+        )) {
+
+        deviceHealth.sensorHealthy = false;
+        digitalWrite(STATUS_LED_PIN, LOW);
+        systemStatus.setStatus(SystemStatus::SENSOR_ERROR);
+
+        Logger::error(
+            "Sensor",
+            "Invalid environmental measurement"
+        );
+
+        Logger::errorf(
+            "System",
+            "System status: %s",
+            systemStatus.getStatusName()
+        );
+
+        return;
+    }
+
+    float temperature = temperatureMeasurement->value;
+    float humidity = humidityMeasurement->value;
 
     /*
      * Sensor recovered after a previous error.
@@ -562,13 +638,13 @@ void loop() {
     Logger::infof(
         "Sensor",
         "Temperature: %.1f C",
-        reading.temperature
+        temperatureMeasurement->value
     );
 
     Logger::infof(
         "Sensor",
         "Humidity: %.1f %%",
-        reading.humidity
+        humidityMeasurement->value
     );
 
     unsigned long currentTelemetryTime = millis();
@@ -581,8 +657,8 @@ void loop() {
 
         TelemetryAnomalyResult anomaly =
             detectTelemetryAnomaly(
-                reading.temperature,
-                reading.humidity,
+                temperature,
+                humidity,
                 previousTemperature,
                 previousHumidity,
                 elapsedMs
@@ -593,27 +669,27 @@ void loop() {
         if (anomaly.hasAnomaly) {
             if (anomaly.temperatureAnomaly) {
                 Logger::warning(
-                    "Anomaly", 
+                    "Anomaly",
                     "Temperature anomaly detected"
-                ); 
+                );
             }
 
             if (anomaly.humidityAnomaly) {
                 Logger::warning(
-                    "Anomaly", 
+                    "Anomaly",
                     "Humidity anomaly detected"
                 );
             }
         } else {
             Logger::info(
-                "Anomaly", 
+                "Anomaly",
                 "No anomaly detected"
             );
         }
     }
 
-    previousTemperature = reading.temperature;
-    previousHumidity = reading.humidity;
+    previousTemperature = temperature;
+    previousHumidity = humidity;
     previousTelemetryTime = currentTelemetryTime;
     hasPreviousTelemetry = true;
 
@@ -634,8 +710,8 @@ void loop() {
         DEVICE_ID,
         FIRMWARE_VERSION,
         millis(),
-        reading.temperature,
-        reading.humidity,
+        temperature,
+        humidity,
         wifiManager.getRSSI(),
         healthState,
         anomalyDetected
