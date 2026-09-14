@@ -49,6 +49,32 @@ void test_dht11_sensor_rejects_read_before_initialization() {
     );
 }
 
+void test_dht11_sensor_sets_data_quality_from_validity() {
+    DHT11Sensor sensor(4);
+
+    TEST_ASSERT_TRUE(sensor.begin());
+
+    Measurement measurements[2];
+
+    bool result = sensor.read(measurements, 2);
+
+    TEST_ASSERT_EQUAL(
+        measurements[0].valid
+            ? DataQuality::VALID
+            : DataQuality::INVALID,
+        measurements[0].quality
+    );
+
+    TEST_ASSERT_EQUAL(
+        measurements[1].valid
+            ? DataQuality::VALID
+            : DataQuality::INVALID,
+        measurements[1].quality
+    );
+
+    (void)result;
+}
+
 void setup() {
     delay(2000);
 
@@ -64,6 +90,10 @@ void setup() {
     );
     RUN_TEST(
         test_dht11_sensor_rejects_read_before_initialization
+    );
+
+    RUN_TEST(
+        test_dht11_sensor_sets_data_quality_from_validity
     );
 
     UNITY_END();

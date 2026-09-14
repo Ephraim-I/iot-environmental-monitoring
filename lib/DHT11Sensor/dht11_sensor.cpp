@@ -59,14 +59,20 @@ bool DHT11Sensor::read(
         _config.temperature.name,
         temperature,
         _config.temperature.unit,
+        temperatureValid,
         temperatureValid
+            ? DataQuality::VALID
+            : DataQuality::INVALID
     };
 
     measurements[1] = {
         _config.humidity.name,
         humidity,
         _config.humidity.unit,
+        humidityValid,
         humidityValid
+            ? DataQuality::VALID
+            : DataQuality::INVALID
     };
 
     return temperatureValid && humidityValid;

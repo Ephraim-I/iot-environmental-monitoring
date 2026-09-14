@@ -155,6 +155,108 @@ void test_boundary_values_are_accepted() {
     );
 }
 
+void test_quality_valid_measurement() {
+    Measurement measurement{
+        "temperature",
+        25.0f,
+        "C",
+        true,
+        DataQuality::VALID
+    };
+
+    MeasurementDefinition definition{
+        "temperature",
+        "C",
+        0.0f,
+        50.0f
+    };
+
+    TEST_ASSERT_EQUAL(
+        DataQuality::VALID,
+        classifyMeasurementQuality(
+            measurement,
+            definition
+        )
+    );
+}
+
+
+void test_quality_outside_range_is_suspect() {
+    Measurement measurement{
+        "temperature",
+        48.0f,
+        "C",
+        true,
+        DataQuality::VALID
+    };
+
+    MeasurementDefinition definition{
+        "temperature",
+        "C",
+        0.0f,
+        40.0f
+    };
+
+    TEST_ASSERT_EQUAL(
+        DataQuality::SUSPECT,
+        classifyMeasurementQuality(
+            measurement,
+            definition
+        )
+    );
+}
+
+
+void test_quality_invalid_measurement_is_invalid() {
+    Measurement measurement{
+        "temperature",
+        25.0f,
+        "C",
+        false,
+        DataQuality::INVALID
+    };
+
+    MeasurementDefinition definition{
+        "temperature",
+        "C",
+        0.0f,
+        50.0f
+    };
+
+    TEST_ASSERT_EQUAL(
+        DataQuality::INVALID,
+        classifyMeasurementQuality(
+            measurement,
+            definition
+        )
+    );
+}
+
+
+void test_quality_wrong_name_is_invalid() {
+    Measurement measurement{
+        "humidity",
+        25.0f,
+        "%RH",
+        true,
+        DataQuality::VALID
+    };
+
+    MeasurementDefinition definition{
+        "temperature",
+        "C",
+        0.0f,
+        50.0f
+    };
+
+    TEST_ASSERT_EQUAL(
+        DataQuality::INVALID,
+        classifyMeasurementQuality(
+            measurement,
+            definition
+        )
+    );
+}
 
 void setup() {
     delay(2000);
@@ -183,6 +285,22 @@ void setup() {
 
     RUN_TEST(
         test_boundary_values_are_accepted
+    );
+
+    RUN_TEST(
+        test_quality_valid_measurement
+    );
+
+    RUN_TEST(
+        test_quality_outside_range_is_suspect
+    );
+
+    RUN_TEST(
+        test_quality_invalid_measurement_is_invalid
+    );
+
+    RUN_TEST(
+        test_quality_wrong_name_is_invalid
     );
 
     UNITY_END();

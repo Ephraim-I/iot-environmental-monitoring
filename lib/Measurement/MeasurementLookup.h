@@ -2,7 +2,6 @@
 #define MEASUREMENT_LOOKUP_H
 
 #include <stddef.h>
-
 #include <Measurement.h>
 
 const Measurement* findMeasurement(
@@ -11,5 +10,10 @@ const Measurement* findMeasurement(
     const char* name
 );
 
-#endif
+Measurement* findMeasurement(
+    Measurement* measurements,
+    size_t count,
+    const char* name
+);
 
+#endif

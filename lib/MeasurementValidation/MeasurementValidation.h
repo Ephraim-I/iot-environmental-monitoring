@@ -4,6 +4,8 @@
 #include <Measurement.h>
 #include <MeasurementDefinition.h>
 
+#include <DataQuality.h>
+
 struct MeasurementValidationRule {
     const char* name;
     float minimum;
@@ -18,6 +20,11 @@ bool validateMeasurement(
 bool validateMeasurement(
     const Measurement& measurement,
     const MeasurementValidationRule& rule
+);
+
+DataQuality classifyMeasurementQuality(
+    const Measurement& measurement,
+    const MeasurementDefinition& definition
 );
 
 #endif

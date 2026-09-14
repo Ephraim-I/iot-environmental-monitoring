@@ -562,14 +562,14 @@ void loop() {
     const size_t measurementCount =
         sensorSampler.measurementCount();
 
-    const Measurement* temperatureMeasurement =
+    Measurement* temperatureMeasurement =
         findMeasurement(
             measurements,
             measurementCount,
             "temperature"
         );
 
-    const Measurement* humidityMeasurement =
+    Measurement* humidityMeasurement =
         findMeasurement(
             measurements,
             measurementCount,
@@ -597,14 +597,23 @@ void loop() {
         return;
     }
 
-    if (!validateMeasurement(
+    DataQuality temperatureQuality =
+        classifyMeasurementQuality(
             *temperatureMeasurement,
             DHT11_DEFAULT_CONFIG.temperature
-        ) ||
-        !validateMeasurement(
+        );
+
+    DataQuality humidityQuality =
+        classifyMeasurementQuality(
             *humidityMeasurement,
             DHT11_DEFAULT_CONFIG.humidity
-        )) {
+        );
+
+    temperatureMeasurement->quality = temperatureQuality;
+    humidityMeasurement->quality = humidityQuality;
+
+    if (temperatureQuality == DataQuality::INVALID ||
+        humidityQuality == DataQuality::INVALID) {
 
         deviceHealth.sensorHealthy = false;
         digitalWrite(STATUS_LED_PIN, LOW);
@@ -624,6 +633,14 @@ void loop() {
         return;
     }
 
+    if (temperatureQuality == DataQuality::SUSPECT ||
+        humidityQuality == DataQuality::SUSPECT) {
+
+        Logger::warning(
+            "Sensor",
+            "Environmental measurement is suspect"
+        );
+    }
     float temperature = temperatureMeasurement->value;
     float humidity = humidityMeasurement->value;
 
