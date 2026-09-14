@@ -3,17 +3,7 @@
 
 #include <Arduino.h>
 
-enum class DeviceSystemStatus {
-    BOOTING,
-    RUNNING,
-    SENSOR_ERROR
-};
-
-enum class DeviceNetworkStatus {
-    DISCONNECTED,
-    CONNECTING,
-    CONNECTED
-};
+#include <device_status.h>
 
 enum class DeviceHealthState {
     HEALTHY,
@@ -23,13 +13,14 @@ enum class DeviceHealthState {
 
 struct DeviceHealth {
     unsigned long uptimeMs;
-    
-    DeviceSystemStatus systemStatus;
-    DeviceNetworkStatus networkStatus;
-    
+
     int wifiRssi;
-    
+
     bool sensorHealthy;
+
+    bool healthStateInitialized;
+    DeviceHealthState previousHealthState;
+    unsigned long lastHealthEvaluationMs;
 
     unsigned long degradedEvents;
     unsigned long faultEvents;
@@ -44,7 +35,15 @@ struct DeviceHealth {
 void resetDeviceHealth(DeviceHealth& health);
 
 DeviceHealthState evaluateDeviceHealth(
-    const DeviceHealth& health
+    SystemStatus systemStatus,
+    NetworkStatus networkStatus,
+    bool sensorHealthy
+);
+
+void updateDeviceHealthState(
+    DeviceHealth& health,
+    DeviceHealthState currentState,
+    unsigned long currentTime
 );
 
 const char* getDeviceHealthStateName(

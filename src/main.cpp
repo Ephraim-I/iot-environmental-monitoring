@@ -83,11 +83,6 @@ TelemetryBuffer telemetryBuffer;
 TelemetryMetrics telemetryMetrics;
 DeviceHealth deviceHealth;
 
-DeviceHealthState previousHealthState =
-    DeviceHealthState::HEALTHY;
-
-unsigned long lastHealthEvaluation = 0;
-
 bool processTelemetryQueue();
 
 float getBufferDropRate(const TelemetryMetrics& metrics);
@@ -248,44 +243,43 @@ void reportTelemetryMetrics() {
 
 void reportDeviceHealth() {
     DeviceHealthState currentHealthState =
-        evaluateDeviceHealth(deviceHealth);
+        evaluateDeviceHealth(
+            systemStatus.getStatus(),
+            systemStatus.getNetworkStatus(),
+            deviceHealth.sensorHealthy
+        );
 
     deviceHealth.healthEvaluations++;
 
     unsigned long currentTime = millis();
 
-    if (lastHealthEvaluation != 0) {
-        unsigned long elapsedTime =
-            currentTime - lastHealthEvaluation;
+    bool wasHealthStateInitialized = deviceHealth.healthStateInitialized;
+    DeviceHealthState previousState = deviceHealth.previousHealthState;
 
-        updateDeviceHealthDuration(
-            deviceHealth,
-            previousHealthState,
-            elapsedTime
+    updateDeviceHealthState(
+        deviceHealth,
+        currentHealthState,
+        currentTime
+    );
+
+    if (!wasHealthStateInitialized) {
+        Logger::infof(
+            "Health",
+            "Initial health state: %s",
+            getDeviceHealthStateName(currentHealthState)
         );
     }
-
-    lastHealthEvaluation = currentTime;
-
-    if (hasDeviceHealthStateChanged(
-            previousHealthState,
-            currentHealthState
-        )) {
-
-        updateDeviceHealthCounters(
-            deviceHealth,
-            previousHealthState,
-            currentHealthState
-        );
+    else if (hasDeviceHealthStateChanged(
+                 previousState,
+                 currentHealthState
+    )) {
 
         Logger::warningf(
             "Health",
             "Health state changed: %s -> %s",
-            getDeviceHealthStateName(previousHealthState),
+            getDeviceHealthStateName(previousState),
             getDeviceHealthStateName(currentHealthState)
         );
-
-        previousHealthState = currentHealthState;
     }
 
     Logger::infof(
@@ -423,14 +417,6 @@ void loop() {
     }
 
     deviceHealth.uptimeMs = currentTime;
-
-    deviceHealth.systemStatus = static_cast<DeviceSystemStatus>(
-        systemStatus.getStatus()
-    );
-
-    deviceHealth.networkStatus = static_cast<DeviceNetworkStatus>(
-        systemStatus.getNetworkStatus()
-    );
 
     deviceHealth.wifiRssi = wifiManager.getRSSI();
 
@@ -698,7 +684,11 @@ void loop() {
      * creating the telemetry sample.
      */
     DeviceHealthState currentHealthState =
-        evaluateDeviceHealth(deviceHealth);
+        evaluateDeviceHealth(
+            systemStatus.getStatus(),
+            systemStatus.getNetworkStatus(),
+            deviceHealth.sensorHealthy
+        );
 
     const char* healthState =
         getDeviceHealthStateName(currentHealthState);

@@ -7,13 +7,15 @@ void test_healthy_device()
 {
     DeviceHealth health;
 
-    health.systemStatus = DeviceSystemStatus::RUNNING;
-    health.networkStatus = DeviceNetworkStatus::CONNECTED;
     health.sensorHealthy = true;
 
     TEST_ASSERT_EQUAL(
         DeviceHealthState::HEALTHY,
-        evaluateDeviceHealth(health)
+        evaluateDeviceHealth(
+            SystemStatus::RUNNING,
+            NetworkStatus::CONNECTED,
+            health.sensorHealthy
+        )
     );
 }
 
@@ -21,13 +23,15 @@ void test_degraded_device_when_network_disconnected()
 {
     DeviceHealth health;
 
-    health.systemStatus = DeviceSystemStatus::RUNNING;
-    health.networkStatus = DeviceNetworkStatus::DISCONNECTED;
     health.sensorHealthy = true;
 
     TEST_ASSERT_EQUAL(
         DeviceHealthState::DEGRADED,
-        evaluateDeviceHealth(health)
+        evaluateDeviceHealth(
+            SystemStatus::RUNNING,
+            NetworkStatus::DISCONNECTED,
+            health.sensorHealthy
+        )
     );
 }
 
@@ -35,13 +39,15 @@ void test_fault_when_sensor_unhealthy()
 {
     DeviceHealth health;
 
-    health.systemStatus = DeviceSystemStatus::RUNNING;
-    health.networkStatus = DeviceNetworkStatus::CONNECTED;
     health.sensorHealthy = false;
 
     TEST_ASSERT_EQUAL(
         DeviceHealthState::FAULT,
-        evaluateDeviceHealth(health)
+        evaluateDeviceHealth(
+            SystemStatus::RUNNING,
+            NetworkStatus::CONNECTED,
+            health.sensorHealthy
+        )
     );
 }
 
@@ -49,13 +55,15 @@ void test_fault_when_system_reports_sensor_error()
 {
     DeviceHealth health;
 
-    health.systemStatus = DeviceSystemStatus::SENSOR_ERROR;
-    health.networkStatus = DeviceNetworkStatus::CONNECTED;
     health.sensorHealthy = false;
 
     TEST_ASSERT_EQUAL(
         DeviceHealthState::FAULT,
-        evaluateDeviceHealth(health)
+        evaluateDeviceHealth(
+            SystemStatus::SENSOR_ERROR,
+            NetworkStatus::CONNECTED,
+            health.sensorHealthy
+        )
     );
 }
 
@@ -193,6 +201,184 @@ void test_fault_duration() {
     );
 }
 
+void test_initial_health_baseline()
+{
+    DeviceHealth health;
+    resetDeviceHealth(health);
+
+    TEST_ASSERT_FALSE(
+        health.healthStateInitialized
+    );
+
+    DeviceHealthState current =
+        evaluateDeviceHealth(
+            SystemStatus::BOOTING,
+            NetworkStatus::DISCONNECTED,
+            true
+        );
+
+    updateDeviceHealthState(
+        health,
+        current,
+        1000
+    );
+
+    TEST_ASSERT_TRUE(
+        health.healthStateInitialized
+    );
+
+    TEST_ASSERT_EQUAL(
+        DeviceHealthState::DEGRADED,
+        health.previousHealthState
+    );
+
+    TEST_ASSERT_EQUAL_UINT32(
+        0,
+        health.degradedEvents
+    );
+
+    TEST_ASSERT_EQUAL_UINT32(
+        0,
+        health.faultEvents
+    );
+
+    TEST_ASSERT_EQUAL_UINT32(
+        0,
+        health.recoveryEvents
+    );
+
+    TEST_ASSERT_EQUAL_UINT32(
+        1000,
+        health.lastHealthEvaluationMs
+    );
+}
+
+void test_health_state_transition()
+{
+    DeviceHealth health;
+    resetDeviceHealth(health);
+
+    health.healthStateInitialized = true;
+    health.previousHealthState =
+        DeviceHealthState::DEGRADED;
+
+    DeviceHealthState current =
+        DeviceHealthState::HEALTHY;
+
+    TEST_ASSERT_TRUE(
+        hasDeviceHealthStateChanged(
+            health.previousHealthState,
+            current
+        )
+    );
+
+    updateDeviceHealthCounters(
+        health,
+        health.previousHealthState,
+        current
+    );
+
+    TEST_ASSERT_EQUAL_UINT32(
+        1,
+        health.recoveryEvents
+    );
+
+    TEST_ASSERT_EQUAL_UINT32(
+        0,
+        health.degradedEvents
+    );
+
+    TEST_ASSERT_EQUAL_UINT32(
+        0,
+        health.faultEvents
+    );
+
+    health.previousHealthState = current;
+}
+
+void test_fault_recovery_transition()
+{
+    DeviceHealth health;
+    resetDeviceHealth(health);
+
+    health.healthStateInitialized = true;
+    health.previousHealthState =
+        DeviceHealthState::HEALTHY;
+
+    DeviceHealthState current =
+        DeviceHealthState::FAULT;
+
+    updateDeviceHealthCounters(
+        health,
+        health.previousHealthState,
+        current
+    );
+
+    TEST_ASSERT_EQUAL_UINT32(
+        1,
+        health.faultEvents
+    );
+
+    health.previousHealthState = current;
+
+    current = DeviceHealthState::HEALTHY;
+
+    updateDeviceHealthCounters(
+        health,
+        health.previousHealthState,
+        current
+    );
+
+    TEST_ASSERT_EQUAL_UINT32(
+        1,
+        health.recoveryEvents
+    );
+
+    TEST_ASSERT_EQUAL_UINT32(
+        1,
+        health.faultEvents
+    );
+}
+
+void test_health_duration_tracking()
+{
+    DeviceHealth health;
+    resetDeviceHealth(health);
+
+    updateDeviceHealthDuration(
+        health,
+        DeviceHealthState::HEALTHY,
+        1000
+    );
+
+    updateDeviceHealthDuration(
+        health,
+        DeviceHealthState::DEGRADED,
+        2000
+    );
+
+    updateDeviceHealthDuration(
+        health,
+        DeviceHealthState::FAULT,
+        3000
+    );
+
+    TEST_ASSERT_EQUAL_UINT32(
+        1000,
+        health.healthyDurationMs
+    );
+
+    TEST_ASSERT_EQUAL_UINT32(
+        2000,
+        health.degradedDurationMs
+    );
+
+    TEST_ASSERT_EQUAL_UINT32(
+        3000,
+        health.faultDurationMs
+    );
+}
+
 void setup()
 {
     delay(2000);
@@ -212,6 +398,10 @@ void setup()
     RUN_TEST(test_healthy_duration);
     RUN_TEST(test_degraded_duration);
     RUN_TEST(test_fault_duration);
+    RUN_TEST(test_initial_health_baseline);
+    RUN_TEST(test_health_state_transition);
+    RUN_TEST(test_fault_recovery_transition);
+    RUN_TEST(test_health_duration_tracking);
 
    UNITY_END();
 }

@@ -3,10 +3,13 @@
 void resetDeviceHealth(DeviceHealth& health) {
     health.uptimeMs = 0;
 
-    health.systemStatus = DeviceSystemStatus::BOOTING;
-    health.networkStatus = DeviceNetworkStatus::DISCONNECTED;
-
     health.wifiRssi = 0;
+
+    health.sensorHealthy = false;
+
+    health.healthStateInitialized = false;
+    health.previousHealthState = DeviceHealthState::HEALTHY;
+    health.lastHealthEvaluationMs = 0;
 
     health.degradedEvents = 0;
     health.faultEvents = 0;
@@ -17,22 +20,23 @@ void resetDeviceHealth(DeviceHealth& health) {
     health.degradedDurationMs = 0;
     health.faultDurationMs = 0;
 
-    health.sensorHealthy = false;
 }
 
 DeviceHealthState evaluateDeviceHealth(
-    const DeviceHealth& health
+    SystemStatus systemStatus,
+    NetworkStatus networkStatus,
+    bool sensorHealthy
 ) {
     if (
-        health.systemStatus == DeviceSystemStatus::SENSOR_ERROR ||
-        !health.sensorHealthy
+        systemStatus == SystemStatus::SENSOR_ERROR ||
+        !sensorHealthy
     ) {
         return DeviceHealthState::FAULT;
     }
 
     if (
-        health.systemStatus == DeviceSystemStatus::RUNNING &&
-        health.networkStatus == DeviceNetworkStatus::CONNECTED
+        systemStatus == SystemStatus::RUNNING &&
+        networkStatus == NetworkStatus::CONNECTED
     ) {
         return DeviceHealthState::HEALTHY;
     }
@@ -111,4 +115,43 @@ void updateDeviceHealthDuration(
         default:
             break;
     }
+}
+
+void updateDeviceHealthState(
+    DeviceHealth& health,
+    DeviceHealthState currentState,
+    unsigned long currentTime
+) {
+    if (!health.healthStateInitialized) {
+        health.previousHealthState = currentState;
+        health.healthStateInitialized = true;
+        health.lastHealthEvaluationMs = currentTime;
+
+        return;
+    }
+
+    unsigned long elapsedTime =
+        currentTime - health.lastHealthEvaluationMs;
+
+    updateDeviceHealthDuration(
+        health,
+        health.previousHealthState,
+        elapsedTime
+    );
+
+    if (hasDeviceHealthStateChanged(
+            health.previousHealthState,
+            currentState
+        )) {
+
+        updateDeviceHealthCounters(
+            health,
+            health.previousHealthState,
+            currentState
+        );
+
+        health.previousHealthState = currentState;
+    }
+
+    health.lastHealthEvaluationMs = currentTime;
 }
