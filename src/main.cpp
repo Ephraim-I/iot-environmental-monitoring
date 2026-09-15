@@ -30,6 +30,8 @@
 #include <MeasurementLookup.h>
 #include <MeasurementValidation.h>
 
+#include <DataQuality.h>
+
 DHT11Sensor environmentSensor(
     DHT11_DEFAULT_CONFIG
 );
@@ -735,7 +737,9 @@ void loop() {
         FIRMWARE_VERSION,
         millis(),
         temperature,
+        dataQualityToString(temperatureQuality),
         humidity,
+        dataQualityToString(humidityQuality),
         wifiManager.getRSSI(),
         healthState,
         anomalyDetected

@@ -135,7 +135,7 @@ void test_null_arguments_are_rejected() {
 
     TEST_ASSERT_NULL(
         findMeasurement(
-            nullptr,
+            static_cast<Measurement*>(nullptr),
             1,
             "temperature"
         )

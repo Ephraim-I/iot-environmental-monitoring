@@ -22,7 +22,9 @@ def initialize_database():
             firmware_version TEXT NOT NULL,
             uptime_ms INTEGER NOT NULL,
             temperature REAL NOT NULL,
+            temperature_quality TEXT,
             humidity REAL NOT NULL,
+            humidity_quality TEXT,
             wifi_rssi INTEGER NOT NULL,
             health_state TEXT NOT NULL,
             anomaly_detected INTEGER NOT NULL,
@@ -74,6 +76,22 @@ def initialize_database():
             """ALTER TABLE telemetry ADD COLUMN anomaly_detected INTEGER"""
         )
 
+    if "temperature_quality" not in column_names:
+        connection.execute(
+            """
+            ALTER TABLE telemetry
+            ADD COLUMN temperature_quality TEXT
+            """
+        )
+
+    if "humidity_quality" not in column_names:
+        connection.execute(
+            """
+            ALTER TABLE telemetry
+            ADD COLUMN humidity_quality TEXT
+            """
+        )
+
     connection.commit()
     connection.close()
 
@@ -83,7 +101,9 @@ def save_telemetry(
     firmware_version,
     uptime_ms,
     temperature,
+    temperature_quality,
     humidity,
+    humidity_quality,
     wifi_rssi,
     health_state,
     anomaly_detected,
@@ -98,19 +118,23 @@ def save_telemetry(
                 firmware_version,
                 uptime_ms,
                 temperature,
+                temperature_quality,
                 humidity,
+                humidity_quality,
                 wifi_rssi,
                 health_state,
                 anomaly_detected
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 device_id,
                 firmware_version,
                 uptime_ms,
                 temperature,
+                temperature_quality,
                 humidity,
+                humidity_quality,
                 wifi_rssi,
                 health_state,
                 anomaly_detected,
@@ -137,7 +161,9 @@ def fetch_telemetry(limit):
                 firmware_version,
                 uptime_ms,
                 temperature,
+                temperature_quality,
                 humidity,
+                humidity_quality,
                 wifi_rssi,
                 health_state,
                 anomaly_detected,

@@ -1,4 +1,23 @@
 #include "Telemetry.h"
+#include <DataQuality.h>
+
+const char* dataQualityToString(
+    DataQuality quality
+) {
+    switch (quality) {
+        case DataQuality::VALID:
+            return "VALID";
+
+        case DataQuality::SUSPECT:
+            return "SUSPECT";
+
+        case DataQuality::INVALID:
+            return "INVALID";
+
+        default:
+            return "INVALID";
+    }
+}
 
 String telemetryToJson(const TelemetryData& data) {
     String json = "{";
@@ -18,10 +37,18 @@ String telemetryToJson(const TelemetryData& data) {
     json += "\"temperature\":";
     json += String(data.temperature, 1);
     json += ",";
-
+    
+    json += "\"temperature_quality\":\"";
+    json += data.temperatureQuality;
+    json += "\",";
+    
     json += "\"humidity\":";
     json += String(data.humidity, 1);
     json += ",";
+    
+    json += "\"humidity_quality\":\"";
+    json += data.humidityQuality;
+    json += "\",";
 
     json += "\"wifi_rssi\":";
     json += String(data.wifiRssi);

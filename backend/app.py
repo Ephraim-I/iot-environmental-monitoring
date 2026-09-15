@@ -33,7 +33,9 @@ def receive_telemetry():
         "firmware_version",
         "uptime_ms",
         "temperature",
+        "temperature_quality",
         "humidity",
+        "humidity_quality",
         "wifi_rssi",
         "health_state",
         "anomaly_detected",
@@ -80,6 +82,18 @@ def receive_telemetry():
         return jsonify({
             "status": "error",
             "message": "humidity must be numeric",
+        }), 400
+
+    if not isinstance(data["temperature_quality"], str):
+        return jsonify({
+            "status": "error",
+            "message": "temperature_quality must be a string",
+        }), 400
+
+    if not isinstance(data["humidity_quality"], str):
+        return jsonify({
+            "status": "error",
+            "message": "humidity_quality must be a string",
         }), 400
 
     if type(data["wifi_rssi"]) is not int:
@@ -162,6 +176,30 @@ def receive_telemetry():
             "message": "health_state must be one of HEALTHY, DEGRADED, FAULT",
         }), 400
 
+    valid_data_qualities = {
+        "VALID",
+        "SUSPECT",
+        "INVALID",
+    }
+
+    if data["temperature_quality"] not in valid_data_qualities:
+        return jsonify({
+            "status": "error",
+            "message": (
+                "temperature_quality must be one of "
+                "VALID, SUSPECT, INVALID"
+            ),
+        }), 400
+
+    if data["humidity_quality"] not in valid_data_qualities:
+        return jsonify({
+            "status": "error",
+            "message": (
+                "humidity_quality must be one of "
+                "VALID, SUSPECT, INVALID"
+            ),
+        }), 400
+
     data["device_id"] = data["device_id"].strip()
     data["firmware_version"] = data["firmware_version"].strip()
 
@@ -170,7 +208,9 @@ def receive_telemetry():
         firmware_version=data["firmware_version"],
         uptime_ms=data["uptime_ms"],
         temperature=data["temperature"],
+        temperature_quality=data["temperature_quality"],
         humidity=data["humidity"],
+        humidity_quality=data["humidity_quality"],
         wifi_rssi=data["wifi_rssi"],
         health_state=data["health_state"],
         anomaly_detected=data["anomaly_detected"],
