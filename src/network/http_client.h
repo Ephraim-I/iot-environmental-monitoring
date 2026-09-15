@@ -2,19 +2,15 @@
 #define HTTP_CLIENT_H
 
 #include <Arduino.h>
+#include <HttpTransport.h>
 
-enum class HttpResult {
-    SUCCESS,
-    CLIENT_INIT_FAILED,
-    TRANSPORT_ERROR,
-    SERVER_REJECTED
-};
-
-class HttpClient {
+class HttpClient : public HttpTransport {
 public:
-    HttpClient(const char* endpoint);
+    explicit HttpClient(const char* endpoint);
 
-    HttpResult postJson(const String& payload);
+    HttpResult postJson(
+        const String& payload
+    ) override;
 
 private:
     const char* _endpoint;
