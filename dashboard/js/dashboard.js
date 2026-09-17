@@ -632,7 +632,7 @@ function updateDeviceConnectionStatus(deviceStatus) {
     }
 
     const receivedAt = new Date(
-        deviceStatus.received_at.replace(" ", "T")
+        deviceStatus.received_at.replace(" ", "T") + "Z"
     );
 
     if (Number.isNaN(receivedAt.getTime())) {
