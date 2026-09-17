@@ -8,6 +8,10 @@ ESP32 → HTTP API → SQLite → Web Dashboard
 
 The project focuses on engineering reliability rather than simply collecting sensor readings. Measurements are validated, classified by data quality, associated with device health and anomaly state, buffered when the backend is unavailable, and delivered when connectivity is restored.
 
+## Dashboard
+
+![Environmental Monitoring Dashboard](docs/images/dashboard-overview.png)
+
 ## Overview
 The system uses an ESP32 with a DHT11 temperature and humidity sensor to periodically collect environmental measurements.
 The firmware is organized into independent components for:
