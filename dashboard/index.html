@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0"
+    >
+
+    <title>IoT Environmental Monitoring</title>
+
+    <link
+        rel="stylesheet"
+        href="css/dashboard.css"
+    >
+</head>
+
+<body>
+
+    <header class="dashboard-header">
+        <div class="dashboard-title">
+            <h1>Environmental Monitoring</h1>
+            <p class="dashboard-subtitle">
+                ESP32 telemetry and device health monitoring
+            </p>
+        </div>
+
+        <div class="connection-status-group">
+            <span id="connection-status">API: Connecting...</span>
+            <span id="device-connection-status">Device: Checking...</span>
+        </div>
+    </header>
+
+    <main class="dashboard-container">
+
+        <section class="dashboard-section">
+            <h2>Device Information</h2>
+
+            <div class="info-panel">
+                <div>
+                    <span>Device ID</span>
+                    <strong id="device-id">--</strong>
+                </div>
+            
+                <div>
+                    <span>Firmware</span>
+                    <strong id="firmware-version">--</strong>
+                </div>
+            
+                <div>
+                    <span>Uptime</span>
+                    <strong id="uptime">--</strong>
+                </div>
+            
+                <div>
+                    <span>Last Telemetry</span>
+                    <strong id="last-telemetry">--</strong>
+                </div>
+            
+                <div>
+                    <span>Anomaly</span>
+                    <strong id="anomaly-status">--</strong>
+                </div>
+            </div>
+        </section>
+
+        <section class="dashboard-section">
+            <h2>System Overview</h2>
+
+            <div class="status-panel">
+
+                <div>
+                    <span>Telemetry Records</span>
+                    <strong id="total-records">--</strong>
+                </div>
+
+                <div>
+                    <span>Anomalies</span>
+                    <strong id="anomalies">--</strong>
+                </div>
+
+                <div>
+                    <span>Healthy</span>
+                    <strong id="healthy-records">--</strong>
+                </div>
+
+                <div>
+                    <span>Degraded</span>
+                    <strong id="degraded-records">--</strong>
+                </div>
+
+                <div>
+                    <span>Fault</span>
+                    <strong id="fault-records">--</strong>
+                </div>
+
+            </div>
+        </section>
+
+ <section class="dashboard-section">
+
+    <div class="section-header">
+        <h2>Trends</h2>
+
+        <div class="section-controls">
+            <label for="history-limit">
+                Records:
+                <select id="history-limit">
+                    <option value="10">10</option>
+                    <option value="25">25</option>
+                    <option value="50" selected>50</option>
+                    <option value="100">100</option>
+                </select>
+            </label>
+
+            <button id="refresh-dashboard" type="button">
+                Refresh
+            </button>
+        </div>
+    </div>
+
+    <div class="charts-container">
+
+        <div class="chart-card">
+            <h3>Temperature</h3>
+            <svg
+                id="temperature-chart"
+                viewBox="0 0 800 300"
+                preserveAspectRatio="none"
+                aria-label="Temperature history chart"
+            ></svg>
+        </div>
+
+        <div class="chart-card">
+            <h3>Humidity</h3>
+            <svg
+                id="humidity-chart"
+                viewBox="0 0 800 300"
+                preserveAspectRatio="none"
+                aria-label="Humidity history chart"
+            ></svg>
+        </div>
+
+    </div>
+
+</section>
+
+        <section class="dashboard-section">
+            <h2>Data Quality</h2>
+
+            <div class="status-panel">
+
+                <div>
+                    <span>Valid Temperature</span>
+                    <strong id="valid-temperature">--</strong>
+                </div>
+
+                <div>
+                    <span>Suspect Temperature</span>
+                    <strong id="suspect-temperature">--</strong>
+                </div>
+
+                <div>
+                    <span>Invalid Temperature</span>
+                    <strong id="invalid-temperature">--</strong>
+                </div>
+
+                <div>
+                    <span>Valid Humidity</span>
+                    <strong id="valid-humidity">--</strong>
+                </div>
+
+                <div>
+                    <span>Suspect Humidity</span>
+                    <strong id="suspect-humidity">--</strong>
+                </div>
+
+                <div>
+                    <span>Invalid Humidity</span>
+                    <strong id="invalid-humidity">--</strong>
+                </div>
+
+            </div>
+        </section>
+
+    </main>
+
+    <script src="js/api.js"></script>
+    <script src="js/dashboard.js"></script>
+
+</body>
+</html>
+

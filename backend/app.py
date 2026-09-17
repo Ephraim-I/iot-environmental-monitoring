@@ -1,12 +1,27 @@
 from flask import Flask, jsonify, request
+from flask_cors import CORS
+
 from backend.database import (
     initialize_database,
     save_telemetry,
     fetch_telemetry,
+    fetch_latest_telemetry,
+    fetch_device_status,
+    fetch_telemetry_stats,
     get_health_summary,
 )
 
 app = Flask(__name__)
+
+CORS(
+    app,
+    resources={
+        r"/api/*": {
+            "origins": "http://localhost:8000"
+        }
+    }
+)
+
 initialize_database()
 
 
@@ -252,7 +267,12 @@ def get_telemetry():
             "message": "limit cannot exceed 100",
         }), 400
 
-    records = fetch_telemetry(limit)
+    device_id = request.args.get("device_id")
+
+    records = fetch_telemetry(
+        limit,
+        device_id=device_id,
+    )
 
     return jsonify({
         "status": "success",
@@ -260,16 +280,22 @@ def get_telemetry():
         "data": records,
     })
 
+@app.get("/api/telemetry/latest")
+def get_latest_telemetry():
+    device_id = request.args.get("device_id")
 
-if __name__ == "__main__":
-    initialize_database()
+    record = fetch_latest_telemetry(device_id)
 
-    app.run(
-        host="0.0.0.0",
-        port=5000,
-        debug=False,
-    )
+    if record is None:
+        return jsonify({
+            "status": "error",
+            "message": "No telemetry data available",
+        }), 404
 
+    return jsonify({
+        "status": "success",
+        "data": record,
+    })
 
 
 @app.get("/api/telemetry/health")
@@ -280,3 +306,53 @@ def get_health():
         "status": "success",
         "data": summary,
     })
+
+
+@app.get("/api/device/status")
+def get_device_status():
+    device_id = request.args.get("device_id")
+
+    if device_id is None:
+        return jsonify({
+            "status": "error",
+            "message": "device_id is required",
+        }), 400
+
+    device_id = device_id.strip()
+
+    if not device_id:
+        return jsonify({
+            "status": "error",
+            "message": "device_id cannot be empty",
+        }), 400
+
+    record = fetch_device_status(device_id)
+
+    if record is None:
+        return jsonify({
+            "status": "error",
+            "message": "No telemetry data found for device",
+        }), 404
+
+    return jsonify({
+        "status": "success",
+        "data": record,
+    })
+
+@app.get("/api/telemetry/stats")
+def get_telemetry_stats():
+    stats = fetch_telemetry_stats()
+
+    return jsonify({
+        "status": "success",
+        "data": stats,
+    })
+
+if __name__ == "__main__":
+    initialize_database()
+
+    app.run(
+        host="0.0.0.0",
+        port=5000,
+        debug=False,
+    )

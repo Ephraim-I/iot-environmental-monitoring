@@ -96,6 +96,72 @@ def test_telemetry_retrieval(client):
     assert record["health_state"] == "HEALTHY"
     assert record["anomaly_detected"] is False
 
+
+def test_telemetry_retrieval_filters_by_device(client):
+    telemetry_records = [
+        {
+            "device_id": "IOT-ENV-001",
+            "firmware_version": "1.0.0",
+            "uptime_ms": 5000,
+            "temperature": 28.5,
+            "temperature_quality": "VALID",
+            "humidity": 70.0,
+            "humidity_quality": "VALID",
+            "wifi_rssi": -52,
+            "health_state": "HEALTHY",
+            "anomaly_detected": False,
+        },
+        {
+            "device_id": "IOT-ENV-002",
+            "firmware_version": "1.0.0",
+            "uptime_ms": 6000,
+            "temperature": 30.0,
+            "temperature_quality": "VALID",
+            "humidity": 65.0,
+            "humidity_quality": "VALID",
+            "wifi_rssi": -60,
+            "health_state": "HEALTHY",
+            "anomaly_detected": False,
+        },
+        {
+            "device_id": "IOT-ENV-001",
+            "firmware_version": "1.0.0",
+            "uptime_ms": 7000,
+            "temperature": 29.0,
+            "temperature_quality": "VALID",
+            "humidity": 72.0,
+            "humidity_quality": "VALID",
+            "wifi_rssi": -50,
+            "health_state": "HEALTHY",
+            "anomaly_detected": False,
+        },
+    ]
+
+    for telemetry in telemetry_records:
+        response = client.post(
+            "/api/telemetry",
+            json=telemetry,
+        )
+
+        assert response.status_code == 201
+
+    response = client.get(
+        "/api/telemetry?device_id=IOT-ENV-001"
+    )
+
+    assert response.status_code == 200
+
+    data = response.get_json()
+
+    assert data["status"] == "success"
+    assert data["count"] == 2
+    assert len(data["data"]) == 2
+
+    assert all(
+        record["device_id"] == "IOT-ENV-001"
+        for record in data["data"]
+    )
+
 def test_telemetry_rejects_missing_field(client):
     response = client.post(
         "/api/telemetry",
@@ -600,3 +666,155 @@ def test_telemetry_persists_anomaly_state(client):
 
     assert record["health_state"] == "HEALTHY"
     assert record["anomaly_detected"] is True
+
+
+def test_latest_telemetry_endpoint(client):
+    client.post(
+        "/api/telemetry",
+        json={
+            "device_id": "TEST-001",
+            "firmware_version": "1.0.0",
+            "uptime_ms": 5000,
+            "temperature": 25.5,
+            "temperature_quality": "VALID",
+            "humidity": 60.0,
+            "humidity_quality": "VALID",
+            "wifi_rssi": -60,
+            "health_state": "HEALTHY",
+            "anomaly_detected": False,
+        },
+    )
+
+    response = client.get("/api/telemetry/latest")
+
+    assert response.status_code == 200
+
+    data = response.get_json()
+
+    assert data["status"] == "success"
+    assert data["data"]["device_id"] == "TEST-001"
+    assert data["data"]["temperature"] == 25.5
+    assert data["data"]["humidity"] == 60.0
+
+def test_latest_telemetry_endpoint_returns_404_when_empty(client):
+    response = client.get("/api/telemetry/latest")
+
+    assert response.status_code == 404
+
+    data = response.get_json()
+
+    assert data["status"] == "error"
+    assert data["message"] == "No telemetry data available"
+
+
+def test_device_status_endpoint(client):
+    client.post(
+        "/api/telemetry",
+        json={
+            "device_id": "TEST-001",
+            "firmware_version": "1.0.0",
+            "uptime_ms": 5000,
+            "temperature": 25.5,
+            "temperature_quality": "VALID",
+            "humidity": 60.0,
+            "humidity_quality": "VALID",
+            "wifi_rssi": -60,
+            "health_state": "HEALTHY",
+            "anomaly_detected": False,
+        },
+    )
+
+    response = client.get(
+        "/api/device/status?device_id=TEST-001"
+    )
+
+    assert response.status_code == 200
+
+    data = response.get_json()
+
+    assert data["status"] == "success"
+    assert data["data"]["device_id"] == "TEST-001"
+    assert data["data"]["firmware_version"] == "1.0.0"
+    assert data["data"]["wifi_rssi"] == -60
+    assert data["data"]["health_state"] == "HEALTHY"
+
+def test_device_status_requires_device_id(client):
+    response = client.get("/api/device/status")
+
+    assert response.status_code == 400
+
+    data = response.get_json()
+
+    assert data["status"] == "error"
+    assert data["message"] == "device_id is required"
+
+def test_device_status_returns_404_for_unknown_device(client):
+    response = client.get(
+        "/api/device/status?device_id=UNKNOWN-001"
+    )
+
+    assert response.status_code == 404
+
+    data = response.get_json()
+
+    assert data["status"] == "error"
+    assert data["message"] == (
+        "No telemetry data found for device"
+    )
+
+def test_telemetry_stats_endpoint(client):
+    with patch(
+        "backend.app.fetch_telemetry_stats",
+        return_value={
+            "total_records": 3,
+            "healthy_records": 1,
+            "degraded_records": 1,
+            "fault_records": 1,
+            "anomalies_detected": 2,
+            "valid_temperature": 1,
+            "suspect_temperature": 1,
+            "invalid_temperature": 1,
+            "valid_humidity": 2,
+            "suspect_humidity": 0,
+            "invalid_humidity": 1,
+        },
+    ):
+        response = client.get("/api/telemetry/stats")
+
+    assert response.status_code == 200
+
+    data = response.get_json()
+
+    assert data["status"] == "success"
+    assert data["data"]["total_records"] == 3
+    assert data["data"]["healthy_records"] == 1
+    assert data["data"]["degraded_records"] == 1
+    assert data["data"]["fault_records"] == 1
+    assert data["data"]["anomalies_detected"] == 2
+
+
+def test_telemetry_stats_endpoint_returns_zero_counts_when_empty(client):
+    with patch(
+        "backend.app.fetch_telemetry_stats",
+        return_value={
+            "total_records": 0,
+            "healthy_records": 0,
+            "degraded_records": 0,
+            "fault_records": 0,
+            "anomalies_detected": 0,
+            "valid_temperature": 0,
+            "suspect_temperature": 0,
+            "invalid_temperature": 0,
+            "valid_humidity": 0,
+            "suspect_humidity": 0,
+            "invalid_humidity": 0,
+        },
+    ):
+        response = client.get("/api/telemetry/stats")
+
+    assert response.status_code == 200
+
+    data = response.get_json()
+
+    assert data["status"] == "success"
+    assert data["data"]["total_records"] == 0

@@ -1,7 +1,6 @@
 import sqlite3
 from pathlib import Path
 
-
 DATABASE_PATH = Path(__file__).parent / "telemetry.db"
 
 
@@ -149,31 +148,55 @@ def save_telemetry(
         connection.close()
 
 
-def fetch_telemetry(limit):
+def fetch_telemetry(limit, device_id=None):
     connection = get_connection()
 
     try:
-        rows = connection.execute(
-            """
-            SELECT
-                id,
-                device_id,
-                firmware_version,
-                uptime_ms,
-                temperature,
-                temperature_quality,
-                humidity,
-                humidity_quality,
-                wifi_rssi,
-                health_state,
-                anomaly_detected,
-                received_at
-            FROM telemetry
-            ORDER BY id DESC
-            LIMIT ?
-            """,
-            (limit,),
-        ).fetchall()
+        if device_id:
+            rows = connection.execute(
+                """
+                SELECT
+                    id,
+                    device_id,
+                    firmware_version,
+                    uptime_ms,
+                    temperature,
+                    temperature_quality,
+                    humidity,
+                    humidity_quality,
+                    wifi_rssi,
+                    health_state,
+                    anomaly_detected,
+                    received_at
+                FROM telemetry
+                WHERE device_id = ?
+                ORDER BY id DESC
+                LIMIT ?
+                """,
+                (device_id, limit),
+            ).fetchall()
+        else:
+            rows = connection.execute(
+                """
+                SELECT
+                    id,
+                    device_id,
+                    firmware_version,
+                    uptime_ms,
+                    temperature,
+                    temperature_quality,
+                    humidity,
+                    humidity_quality,
+                    wifi_rssi,
+                    health_state,
+                    anomaly_detected,
+                    received_at
+                FROM telemetry
+                ORDER BY id DESC
+                LIMIT ?
+                """,
+                (limit,),
+            ).fetchall()
 
         records = []
 
@@ -181,11 +204,73 @@ def fetch_telemetry(limit):
             record = dict(row)
 
             if record["anomaly_detected"] is not None:
-                record["anomaly_detected"] = bool(record["anomaly_detected"])
+                record["anomaly_detected"] = bool(
+                    record["anomaly_detected"]
+                )
 
             records.append(record)
 
         return records
+
+    finally:
+        connection.close()
+
+def fetch_latest_telemetry(device_id=None):
+    connection = get_connection()
+
+    try:
+        if device_id:
+            row = connection.execute(
+                """
+                SELECT
+                    id,
+                    device_id,
+                    firmware_version,
+                    uptime_ms,
+                    temperature,
+                    temperature_quality,
+                    humidity,
+                    humidity_quality,
+                    wifi_rssi,
+                    health_state,
+                    anomaly_detected,
+                    received_at
+                FROM telemetry
+                WHERE device_id = ?
+                ORDER BY id DESC
+                LIMIT 1
+                """,
+                (device_id,),
+            ).fetchone()
+        else:
+            row = connection.execute(
+                """
+                SELECT
+                    id,
+                    device_id,
+                    firmware_version,
+                    uptime_ms,
+                    temperature,
+                    temperature_quality,
+                    humidity,
+                    humidity_quality,
+                    wifi_rssi,
+                    health_state,
+                    anomaly_detected,
+                    received_at
+                FROM telemetry
+                ORDER BY id DESC
+                LIMIT 1
+                """
+            ).fetchone()
+
+        if row is None:
+            return None
+
+        record = dict(row)
+        record["anomaly_detected"] = bool(record["anomaly_detected"])
+
+        return record
 
     finally:
         connection.close()
@@ -216,6 +301,104 @@ def get_health_summary():
             summary[row["health_state"]] = row["count"]
 
         return summary
+
+    finally:
+        connection.close()
+
+def fetch_device_status(device_id):
+    connection = get_connection()
+
+    try:
+        row = connection.execute(
+            """
+            SELECT
+                device_id,
+                firmware_version,
+                uptime_ms,
+                wifi_rssi,
+                health_state,
+                received_at
+            FROM telemetry
+            WHERE device_id = ?
+            ORDER BY id DESC
+            LIMIT 1
+            """,
+            (device_id,),
+        ).fetchone()
+
+        if row is None:
+            return None
+
+        return dict(row)
+
+    finally:
+        connection.close()
+
+
+def fetch_telemetry_stats():
+    connection = get_connection()
+
+    try:
+        row = connection.execute(
+            """
+            SELECT
+                COUNT(*) AS total_records,
+
+                SUM(
+                    CASE WHEN health_state = 'HEALTHY'
+                    THEN 1 ELSE 0 END
+                ) AS healthy_records,
+
+                SUM(
+                    CASE WHEN health_state = 'DEGRADED'
+                    THEN 1 ELSE 0 END
+                ) AS degraded_records,
+
+                SUM(
+                    CASE WHEN health_state = 'FAULT'
+                    THEN 1 ELSE 0 END
+                ) AS fault_records,
+
+                SUM(
+                    CASE WHEN anomaly_detected = 1
+                    THEN 1 ELSE 0 END
+                ) AS anomalies_detected,
+
+                SUM(
+                    CASE WHEN temperature_quality = 'VALID'
+                    THEN 1 ELSE 0 END
+                ) AS valid_temperature,
+
+                SUM(
+                    CASE WHEN temperature_quality = 'SUSPECT'
+                    THEN 1 ELSE 0 END
+                ) AS suspect_temperature,
+
+                SUM(
+                    CASE WHEN temperature_quality = 'INVALID'
+                    THEN 1 ELSE 0 END
+                ) AS invalid_temperature,
+
+                SUM(
+                    CASE WHEN humidity_quality = 'VALID'
+                    THEN 1 ELSE 0 END
+                ) AS valid_humidity,
+
+                SUM(
+                    CASE WHEN humidity_quality = 'SUSPECT'
+                    THEN 1 ELSE 0 END
+                ) AS suspect_humidity,
+
+                SUM(
+                    CASE WHEN humidity_quality = 'INVALID'
+                    THEN 1 ELSE 0 END
+                ) AS invalid_humidity
+
+            FROM telemetry
+            """
+        ).fetchone()
+
+        return dict(row)
 
     finally:
         connection.close()
